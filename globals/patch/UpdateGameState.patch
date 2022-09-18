@@ -1,0 +1,4039 @@
+% This function handles the inputs regarding in what state the game is currently right now
+
+#export:Data $PauseByte % game is paused
+{ 00 }
+
+#export:Data $Minigame_Data
+{
+00000000 % timer
+00000000 % score
+}
+
+/% state
+01 = title screen
+02 = tutorial
+03 = cooking game - start
+04 = cooking game - step
+05 = cooking game - results
+%/
+#export:Function $UpdateGameState
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1
+    LIO     A1, *GameState
+    JAL     ~func:get_variable
+    RESERVED
+    BEQ     V0, R0, .End
+    ORI     A0, R0, 1
+    BEQ     V0, A0, .State1_TitleScreen
+    ORI     A0, R0, 2
+    BEQ     V0, A0, .State2_Tutorial
+    ORI     A0, R0, 3
+    BEQ     V0, A0, .State3_CookingGame_Start
+    ORI     A0, R0, 4
+    BEQ     V0, A0, .State4_CookingGame_Step
+    ORI     A0, R0, 5
+    BEQ     V0, A0, .State5_CookingGame_Results
+    NOP
+    BEQ     R0, R0, .End
+    NOP
+    .State1_TitleScreen
+    JAL     $DrawContents_TitleScreen
+    NOP
+    BEQ     R0, R0, .End
+    NOP
+    .State2_Tutorial
+    JAL     $CookingMinigame_UpdateCurrentItemPos
+    NOP
+    BEQ     R0, R0, .End
+    NOP
+    .State3_CookingGame_Start
+    JAL     $CookingMinigame_UpdateScoreAndTimer
+    NOP
+    JAL     $ReadySetGo
+    NOP
+    BEQ     R0, R0, .End
+    NOP
+    .State4_CookingGame_Step % Inside cooking game
+    JAL     $CookingMinigame_UpdateCurrentItemPos
+    NOP
+    JAL     $CookingMinigame_ShowProgressNotif
+    NOP
+    JAL     $CookingMinigame_GrabAndPutItems
+    NOP
+    JAL     $CookingMinigame_UpdateOrdersQueue
+    NOP
+    JAL     $CookingMinigame_UpdateScoreAndTimer
+    NOP
+    JAL     $CookingMinigame_UpdatePause
+    NOP
+    BEQ     R0, R0, .End
+    NOP
+    .State5_CookingGame_Results
+    JAL     $ResultsScreen_Step
+    NOP
+    .End
+    POP     RA, A0, A1, A2, A3, V0, V1
+    JR      RA
+    NOP
+}
+
+%============
+% State 1 - Title Screen
+%============
+
+#export:Data $Data_Title_Cursor
+{
+    00b % 0x00 % cursor
+    00b % 0x01 % subCursor
+    00b % 0x02 % state
+    00b % 0x03 % lock menu inputs (bool)
+
+    0000s % 0x04 % opacity
+    00b % 0x06 % replay mode (bool)
+    00b % 0x07 % unused
+}
+
+/%
+-Cursor states-
+00=Title screen
+01=Move to Levels
+02=Levels_init
+03=Levels_step
+04=Levels_leave
+05=Move to title screen
+06=Start New Game
+%/
+
+#new:Function $DrawContents_TitleScreen
+{
+    PUSH    R0, R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2, S3, S4, S5, S6, S7
+    LIO     S0, $Data_Title_Cursor
+    LBU     A0, 2 (S0) % state
+    ORI     A1, R0, 6 % Start new game
+    BEQ     A0, A1, .End
+    NOP
+    % draw credits
+    LIO     A0, ~Model:lvl_10:credits % A2
+    JAL     $Function_getModelScreenCoords
+    RESERVED
+    LW      S1, 10 (SP)
+    LW      S2, 14 (SP)    
+    LIO     A0, $String_Credits_Dex
+    ADDI    A1, S1, -129` % X
+    ADDI    A2, S2, 0005 % Y
+    SW      R0, 10 (SP) % color
+    SW      R0, 14 (SP) % text fx
+    JAL     ~Func:draw_string
+    ORI     A3, R0, FF % opacity
+    %
+    LIO     A0, $String_Credits_Kevin
+    ADDI    A1, S1, -129` % X
+    ADDI    A2, S2, 0013 % Y
+    SW      R0, 10 (SP) % color
+    SW      R0, 14 (SP) % text fx
+    JAL     ~Func:draw_string
+    ORI     A3, R0, FF % opacity
+    %
+    % Draw - New, Continue, Levels
+    %
+    ADDI    S1, S1, 0 % x
+    ADDI    S2, S2, 2B % y
+    LIO     A0, $String_NewGame
+    ADDI    A1, S1, -96` % X
+    ADDI    A2, S2, -64 % Y
+    SW      R0, 10 (SP) % color
+    % shake text?
+    LBU     V0, 0 (S0) % cursor
+    BNEL    V0, R0, .New_SetCursorFX
+    CLEAR   V0
+    LBU     V0, 1 (S0) % subCursor
+    BNEL    V0, R0, .New_SetCursorFX
+    CLEAR   V0
+    ORI     V0, R0, 2 % shake text (fx)
+    .New_SetCursorFX
+    SW      V0, 14 (SP) % text fx
+    JAL     ~Func:draw_string
+    ORI     A3, R0, FF % opacity
+    % check if you can continue the game
+    LIO     A1, *Mod_StoryProgress
+    JAL     ~Func:get_variable
+    RESERVED
+    BEQ     V0, R0, .DrawLevels
+    NOP
+    LIO     A0, $String_Continue
+    ADDI    A1, S1, -96` % X
+    ADDI    A2, S2, -54 % Y
+    SW      R0, 10 (SP) % color
+    % shake text?
+    LBU     V0, 0 (S0) % cursor
+    BNEL    V0, R0, .Continue_SetCursorFX
+    CLEAR   V0
+    LBU     V0, 1 (S0) % subCursor
+    ORI     V1, R0, 1
+    BNEL    V0, V1, .Continue_SetCursorFX
+    CLEAR   V0
+    ORI     V0, R0, 2 % shake text (fx)
+    .Continue_SetCursorFX
+    SW      V0, 14 (SP) % text fx
+    JAL     ~Func:draw_string
+    ORI     A3, R0, FF % opacity
+    %
+    % check if any other levels can be played
+    LIO     A1, *Level1_Beaten
+    JAL     ~Func:get_variable
+    RESERVED
+    BEQ     V0, R0, .DrawLevels
+    NOP
+    LIO     A0, $String_Levels
+    ADDI    A1, S1, -96` % X
+    ADDI    A2, S2, -44 % Y
+    SW      R0, 10 (SP) % color
+    % shake text?
+    LBU     V0, 0 (S0) % cursor
+    BNEL    V0, R0, .Levels_SetCursorFX
+    CLEAR   V0
+    LBU     V0, 1 (S0) % subCursor
+    ORI     V1, R0, 2
+    BNEL    V0, V1, .Levels_SetCursorFX
+    CLEAR   V0
+    ORI     V0, R0, 2 % shake text (fx)
+    .Levels_SetCursorFX
+    SW      V0, 14 (SP) % text fx
+    JAL     ~Func:draw_string
+    ORI     A3, R0, FF % opacity
+    %===============
+    % Levels
+    %===============
+    .DrawLevels
+    LBU     A0, 2 (S0) % state
+    LH      S3, 4 (S0) % opacity
+    ORI     A1, R0, 2
+    BNE     A0, A1, .Check_State3
+    ORI     A1, R0, 3
+    % Unfade strings
+    ADDI    S3, S3, 10
+    SLTIU   A2, S3, FF
+    BNEL    A2, R0, .DrawStrings_Levels
+    SH      S3, 4 (S0) % opacity
+    % Opacity has reached FF
+    ORI     S3, R0, FF
+    SH      S3, 4 (S0) % opacity
+    ORI     A1, R0, 3 % Levels_step
+    BEQ     R0, R0, .DrawStrings_Levels
+    SB      A1, 2, (S0) % state
+    .Check_State3
+    BNE     A0, A1, .Check_State4
+    ORI     A1, R0, 4
+    %====================
+    .DrawStrings_Levels
+    %====================
+    CLEAR   S4
+    .DrawNextLevel
+    % get level data
+    CLEAR   A0
+    BNE     S4, R0, .DrawLevels_CheckLevel_2
+    NOP
+    % Check if this level is unlocked
+    LIO     A1, *Level1_Beaten
+    JAL     ~Func:get_variable
+    RESERVED
+    BEQL    V0, R0, .DrawNextLevel
+    ADDIU   S4, S4, 1
+    % Level 1 % Peach Castle
+    LIO     A0, ~Model:lvl_10:level1_p
+    LIO     S6, $String_Castle
+    LIO     S7, 8035603A % Level1_Highscore_byte1
+    ORI     A1, R0, 30` % 1 star requisite
+    SW      A1, 1C (SP)
+    BEQ     R0, R0, .DrawLevelData
+    NOP
+    .DrawLevels_CheckLevel_2
+    ORI     A0, R0, 1
+    BNE     S4, A0, .DrawLevels_CheckLevel_3
+    NOP
+    % Check if this level is unlocked
+    LIO     A1, *Level2_Beaten
+    JAL     ~Func:get_variable
+    RESERVED
+    BEQL    V0, R0, .DrawLevels_CheckLevel_3
+    ADDIU   S4, S4, 1
+    % Level 2 % Toad Town
+    LIO     A0, ~Model:lvl_10:level2_p
+    LIO     S6, $String_ToadTown
+    LIO     S7, 8035603C % Level2_Highscore_byte1
+    ORI     A1, R0, 40` % 1 star requisite
+    SW      A1, 1C (SP)
+    BEQ     R0, R0, .DrawLevelData
+    NOP
+    .DrawLevels_CheckLevel_3
+    ORI     A0, R0, 2
+    BNE     S4, A0, .DrawLevels_CheckLevel_4
+    NOP
+    % Check if this level is unlocked
+    LIO     A1, *Level3_Beaten
+    JAL     ~Func:get_variable
+    RESERVED
+    BEQL    V0, R0, .DrawLevels_CheckLevel_4
+    ADDIU   S4, S4, 1
+    % Level 3 % Shy Guy's Toy Box
+    LIO     A0, ~Model:lvl_10:level3_p
+    LIO     S6, $String_ToyBox
+    LIO     S7, 8035603E % Level3_Highscore_byte1
+    ORI     A1, R0, 45` % 1 star requisite
+    SW      A1, 1C (SP)
+    BEQ     R0, R0, .DrawLevelData
+    NOP
+    .DrawLevels_CheckLevel_4
+    ORI     A0, R0, 3
+    BNE     S4, A0, .DrawLevels_CheckLevel_5
+    NOP
+    % Check if this level is unlocked
+    LIO     A1, *Level4_Beaten
+    JAL     ~Func:get_variable
+    RESERVED
+    BEQL    V0, R0, .DrawLevels_CheckLevel_5
+    ADDIU   S4, S4, 1
+    % Level 4 % Mt Lavalava
+    LIO     A0, ~Model:lvl_10:level4_p
+    LIO     S6, $String_MtLava
+    LIO     S7, 80356040 % Level4_Highscore_byte1
+    ORI     A1, R0, 45` % 1 star requisite
+    SW      A1, 1C (SP)
+    BEQ     R0, R0, .DrawLevelData
+    NOP
+    .DrawLevels_CheckLevel_5
+    ORI     A0, R0, 4
+    BNEL    S4, A0, .End % All levels has been drawn
+    CLEAR   S4
+    % Check if this level is unlocked
+    LIO     A1, *Level5_Beaten
+    JAL     ~Func:get_variable
+    RESERVED
+    BEQL    V0, R0, .DrawNextLevel
+    ADDIU   S4, S4, 1
+    % Level 5 % Shiver Mountain
+    LIO     A0, ~Model:lvl_10:level5_p
+    LIO     S6, $String_ShiverMountain
+    LIO     S7, 80356042 % Level5_Highscore_byte1
+    ORI     A1, R0, 45` % 1 star requisite
+    SW      A1, 1C (SP)
+    BEQ     R0, R0, .DrawLevelData
+    NOP
+    .DrawLevelData
+    % get model's screencords
+    JAL     $Function_getModelScreenCoords
+    NOP
+    %
+    % draw level's name
+    %
+    LW      S1, 10 (SP)
+    LW      S2, 14 (SP)
+    COPY    A0, S6
+    ADDI    A1, S1, -147` % X
+    ADDI    A2, S2, -15` % Y
+    SW      R0, 10 (SP) % color
+    SW      R0, 14 (SP) % text fx
+    JAL     ~Func:draw_string
+    LHU     A3, 4 (S0) % opacity
+    %
+    % draw highscore
+    %
+    LIO     A0, $String_Highscore
+    ADDI    A1, S1, -147` % X
+    ADDI    A2, S2, 0 % Y
+    SW      R0, 10 (SP) % color
+    SW      R0, 14 (SP) % text fx
+    JAL     ~Func:draw_string
+    LHU     A3, 4 (S0) % opacity
+    % draw actual score
+    LHU     A0, 0 (S7) % level's highscore
+    ADDI    A1, S1, -88` % X
+    ADDI    A2, S2, 0 % Y
+    SW      R0, 10 (SP) % color
+    LHU     A3, 4 (S0)
+    SW      A3, 14 (SP) % opacity
+    ORI     A3, R0, 0 % bool
+    JAL     ~Func:draw_number
+    SW      R0, 18 (SP) % text fx
+    %
+    % draw stars
+    %
+    % calculate how many stars to show
+    LW      A1, 1C (SP) % load 1 star requirement
+    LHU     V0, 0 (S7) % load your highscore
+    COPY    A3, A1
+    % get 50%
+    ORI     A2, R0, 50`
+    MULT    A3, A2
+    MFLO    A3
+    ORI     A2, R0, 100`
+    DIV     A3, A2
+    MFLO    A2
+    ADDU    A2, A1, A2
+    ADDU    A3, A1, A1
+    % A2=requirement 150%
+    % A3=requirement 200%
+    % 3 Stars - Check if highscore is >= 200% to requirement
+    SLTU    V1, V0, A3
+    LIO     A0, $String_Star_3
+    BEQ     V1, R0, .DrawStars
+    RESERVED
+    % 2 Stars - Check if highscore is >= 150% to requirement
+    SLTU    V1, V0, A2
+    LIO     A0, $String_Star_2
+    BEQ     V1, R0, .DrawStars
+    RESERVED
+    % 1 Star - Check if highscore is >= to requirement
+    SLTU    V1, V0, A1
+    LIO     A0, $String_Star_1
+    BEQ     V1, R0, .DrawStars
+    RESERVED
+    LIO     A0, $String_Star_0 % highscore is < to requirement
+    .DrawStars
+    ADDI    A1, S1, -55` % X
+    ADDI    A2, S2, -15` % Y
+    SW      R0, 10 (SP) % color
+    SW      R0, 14 (SP) % text fx
+    JAL     ~Func:draw_string
+    LHU     A3, 4 (S0) % opacity
+    % draw next level
+    BEQ     R0, R0, .DrawNextLevel
+    ADDI    S4, S4, 1
+    .Check_State4
+    BNE     A0, A1, .End
+    NOP
+    % Fade strings
+    ADDI    S3, S3, -10
+    BGTZL   S3, .DrawStrings_Levels
+    SH      S3, 4 (S0) % opacity
+    % Opacity has reached zero
+    CLEAR   S3
+    SH      S3, 4 (S0) % opacity
+    ORI     A1, R0, 5 % move to title screen
+    BEQ     R0, R0, .DrawStrings_Levels
+    SB      A1, 2, (S0) % state
+    .End
+    POP     R0, R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2, S3, S4, S5, S6, S7
+    JR      RA
+    NOP
+}
+
+% A0 = modelID
+%
+% save posXYZ in sp(10/14/18)
+#new:Function $Function_getModelScreenCoords
+{
+    PUSH    R0, R0, R0, R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, F4, S0, S1, S2, S3
+    ADDIU   V0, SP, 10
+    SW      V0, 0 (V0) % outSizeX, save value here
+    ADDIU   V0, SP, 14
+    SW      V0, 0 (V0) % outSizeY
+    ADDIU   V0, SP, 18
+    SW      V0, 0 (V0) % outSizeZ
+    ADDIU   A1, SP, 1C % outCenterX, save value here
+    ADDIU   A2, SP, 20 % outCenterY
+    ADDIU   A3, SP, 24 % outCenterZ
+    JAL     ~Func:get_model_center_and_size % save sizes in sp10/14/18
+    NOP
+    % moves coords to A registers
+    LWC1    F4, 1C (SP)
+    MFC1    A1, F4 % x
+    NOP
+    LWC1    F4, 20 (SP)
+    MFC1    A2, F4 % y
+    NOP
+    LWC1    F4, 24 (SP)
+    MFC1    A3, F4 % z
+    NOP
+    % convert world coords to screen coords
+    ADDIU   V0, SP, 10
+    SW      V0, 10 (SP) % save posX here (sp[10])
+    ADDIU   V0, SP, 14
+    SW      V0, 14 (SP) % save posY here
+    ADDIU   V0, SP, 18
+    SW      V0, 18 (SP) % save posZ here
+    JAL     ~Func:get_screen_coords
+    CLEAR   A0
+    % save in previous stack
+    ADDI    A1, SP, 58 % stack size
+    LW      A0, 10 (SP) % x
+    SW      A0, 10 (A1)
+    LW      A0, 14 (SP) % y
+    SW      A0, 14 (A1)
+    LW      A0, 18 (SP) % z
+    SW      A0, 18 (A1)
+    POP     R0, R0, R0, R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, F4, S0, S1, S2, S3
+    JR      RA
+    NOP
+}
+
+#string $String_Credits_Dex
+{
+[Size 14][Color:05]2022 - Mod by elDexter[End]
+}
+
+#string $String_Credits_Kevin
+{
+[Size 14][Color:05]Logo by KevinArthurLS[End]
+}
+
+#string $String_NewGame
+{
+New Game[End]
+}
+
+#string $String_Levels
+{
+Levels[End]
+}
+
+% Levels
+
+#string $String_Castle
+{
+[Size 12]Peach Castle[End]
+}
+
+#string $String_ToadTown
+{
+[Size 12]Toad Town[End]
+}
+
+#string $String_ToyBox
+{
+[Size 12]Shy Guy's Toy Box[End]
+}
+
+#string $String_MtLava
+{
+[Size 12]Mt. Lavalava[End]
+}
+
+#string $String_ShiverMountain
+{
+[Size 12]Shiver Mountain[End]
+}
+
+#string $String_Highscore
+{
+[Size 12]Highscore:[End]
+}
+
+#string $String_Star_0
+{
+[Star][Star][Star][End]
+}
+
+#string $String_Star_1
+{
+[SaveColor][Color:05][Star][RestoreColor][Star][Star][End]
+}
+
+#string $String_Star_2
+{
+[SaveColor][Color:05][Star][Star][RestoreColor][Star][End]
+}
+
+#string $String_Star_3
+{
+[SaveColor][Color:05][Star][Star][Star][RestoreColor][End]
+}
+
+%
+
+#string $String_Star_0_BIG
+{
+[Size:27:25][Star][Star][Star][End]
+}
+
+#string $String_Star_1_BIG
+{
+[Size:27:25][SaveColor][Color:05][Star][RestoreColor][Star][Star][End]
+}
+
+#string $String_Star_2_BIG
+{
+[Size:27:25][SaveColor][Color:05][Star][Star][RestoreColor][Star][End]
+}
+
+#string $String_Star_3_BIG
+{
+[Size:27:25][SaveColor][Color:05][Star][Star][Star][RestoreColor][End]
+}
+
+%============
+% State 2 - Cooking game
+%===========
+
+#new:Function $UnpauseGame
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, F4
+    % resume everything
+    CLEAR	A2
+    LIA		A0, $Script_ResumeAll
+    JAL		~Func:start_script
+    ADDIU	A1, R0, 1
+    ORI     V0, R0, 8 % 8 = max volume
+    SAB     V0, 80159AE5 % music volume
+    % adjust screen brightness
+    SAB     R0, 80156903 % remove brightness lock
+    LIF     F4, 0.0 % 0 = max brightness
+    SAF     F4, 80156904 % screen brightness (float)
+    % clear cursor data
+    SAB     R0, $PauseByte
+    SAW     R0, $Data_PauseMenu
+    CLEAR   A2 % unpause
+    LIO     A1, *PauseGame
+    JAL     ~func:set_variable
+    RESERVED
+    .End
+    POP     RA, A0, A1, A2, A3, V0, V1, F4
+    JR      RA
+    NOP
+}
+
+% Used when you retry or exit the game, so the game stays paused while the screen fades
+#new:Function $UnpauseGame_butDontResume
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, F4
+    ORI     V0, R0, 8 % 8 = max volume
+    SAB     V0, 80159AE5 % music volume
+    % adjust screen brightness
+    SAB     R0, 80156903 % remove brightness lock
+    LIF     F4, 0.0 % 0 = max brightness
+    SAF     F4, 80156904 % screen brightness (float)
+    % clear cursor data
+    SAW     R0, $Data_PauseMenu
+    CLEAR   A2 % unpause
+    LIO     A1, *PauseGame
+    JAL     ~func:set_variable
+    RESERVED
+    .End
+    POP     RA, A0, A1, A2, A3, V0, V1, F4
+    JR      RA
+    NOP
+}
+
+#export:Data $GoTimer
+{
+    0000s % state
+    0000s % timer
+}
+
+#export:Function $ReadySetGo
+{
+    PUSH    R0, R0, RA, A0, A1, A2, A3, V0, V1, S0
+    LIO     S0, $GoTimer
+    LHU     A0, 0 (S0) % state
+    % Start
+    BEQ     A0, R0, .AdvanceTimer
+    NOP
+    .DrawNumbers
+    % 3
+    ORI     A1, R0, 1
+    BEQ     A0, A1, .ConvertIntToASCII
+    ORI     A2, R0, 3
+    % 2
+    ORI     A1, R0, 2
+    BEQ     A0, A1, .ConvertIntToASCII
+    ORI     A2, R0, 2
+    % 1
+    ORI     A1, R0, 3
+    BEQ     A0, A1, .ConvertIntToASCII
+    ORI     A2, R0, 1
+    % GO!
+    ORI     A1, R0, 4
+    BNE     A0, A1, .SetGameState_4
+    NOP
+    LIO     A0, $String_Go
+    BEQ     R0, R0, .DrawString
+    RESERVED
+    .ConvertIntToASCII
+    LIO     A0, $ASCII_Buffer          % Pointer to Save ASCII
+    LIO     A1, $ASCII_Format_Byte     % Type of Format to use
+    JAL     ~Func:sprintf
+    RESERVED
+    % Convert ASCII to String and Print
+    LIO     A0, $String_Buffer_Size25  % save final string here
+    LIO     A1, $ASCII_Buffer   % previously converted ASCII
+    JAL     $ConvertAsciiToPM64String % save in A0
+    RESERVED
+    .DrawString
+    ORI     A1, R0, 0068 % x pos
+    ORI     A2, R0, 0071 % y pos
+    ORI     V0, R0, 2 % shake text (fx)
+    SW      R0, 0010 (SP) % text color
+    SW      V0, 0014 (SP) % text fx
+    JAL     ~Func:draw_string
+    ORI     A3, R0, 00FF % opacity
+    .AdvanceTimer
+    LH      A0, 0 (S0) % state
+    LHU     A1, 2 (S0) % timer
+    ADDIU   A1, A1, 1
+    SH      A1, 2 (S0)
+    % check if is state 4 (GO!), to wait a few more frames
+    ORI     A2, R0, 4
+    BEQL    A0, A2, .ResetTimer
+    SLTIU   A2, A1, 0019
+    % normal numbers
+    SLTIU   A2, A1, 0014
+    .ResetTimer
+    BNE     A2, R0, .End
+    NOP
+    % advance state
+    ADDIU   A0, A0, 1
+    SH      A0, 0 (S0) % state
+    SH      R0, 2 (S0) % clear timer
+    % Play Sound?
+    SLTIU   A2, A0, 5 % only timer states 00-04
+    BEQ     A2, R0, .End
+    NOP
+    ORI     A1, R0, 4
+    BEQL    A0, A1, .PlaySound
+    ORI     A0, R0, 0395 % go sfx / general guy whistle
+    ORI     A0, R0, 0233 % number sfx
+    .PlaySound
+    JAL     ~Func:sfx_play_sound
+    NOP
+    BEQ     R0, R0, .End
+    NOP
+    .SetGameState_4
+    LIO     A1, *GameState
+    JAL     ~Func:set_variable
+    ORI     A2, R0, 4 % Cooking game - step
+    JAL     ~Func:enable_player_input
+    NOP
+    .End
+    POP     R0, R0, RA, A0, A1, A2, A3, V0, V1, S0
+    JR      RA
+    NOP
+}
+
+#new:Data $Data_Results
+{
+    0000s % timer
+    00b % state
+    00b % unused
+    0000s % unused
+}
+
+#new:Function $ResultsScreen_Step
+{
+    PUSH    R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2, S3, S4
+    LIO     S0, $Data_Results
+    LIO     S3, $Minigame_Data
+    LBU     S1, 2 (S0) % state
+    BNE     S1, R0, .CheckState_1
+    ORI     A1, R0, 1
+    % state 0 % init
+    JAL     ~Func:disable_player_input
+    NOP
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 0395 % general guy whistle
+    ORI     A1, R0, 1
+    BEQ     R0, R0, .End
+    SB      A1, 2 (S0) % state
+    .CheckState_1
+    BNE     S1, A1, .CheckState_2
+    ORI     A1, R0, 2
+    % state 1 % wait
+    %
+    % wait until the sound ends
+    LH      A1, 0 (S0) % timer
+    ADDI    A1, A1, 1
+    SLTIU   A2, A1, 60`
+    BEQL    A2, R0, .End
+    SH      A1, 0 (S0) % timer
+    % move to state 2
+    SH      R0, 0 (S0) % timer
+    ORI     A1, R0, 2
+    BEQ     R0, R0, .End
+    SB      A1, 2 (S0) % state
+    .CheckState_2 % Score
+    SLTIU   A1, S1, 1
+    BNE     A1, R0, .End
+    NOP
+    % state >=2
+    %
+    % S1=state
+    LIO     A0, $String_Score
+    ORI     A1, R0, 0063 % x pos
+    ORI     A2, R0, 0053 % y pos
+    % get opacity
+    % state is >=3?
+    SLTIU   S2, S1, 3
+    BNEL    S2, R0, .State2_drawString
+    LH      A3, 0 (S0) % timer
+    ORI     A3, R0, FF % state >=3
+    .State2_drawString
+    JAL     ~Func:draw_string
+    SW      R0, 0014 (SP) % text fx
+    BEQ     S2, R0, .CheckState_3
+    NOP
+    BEQ     R0, R0, .AdvanceTimer_Opacity
+    NOP
+    .CheckState_3 % Actual Score
+    SLTIU   A1, S1, 2
+    BNE     A1, R0, .End
+    NOP
+    % state >=3
+    %
+    % S1=state
+    %
+    % get opacity
+    % state is >=4?
+    SLTIU   S2, S1, 4
+    BNEL    S2, R0, .State3_drawString
+    LH      A3, 0 (S0) % timer
+    ORI     A3, R0, FF % state >=4
+    .State3_drawString
+    LW      A0, 4 (S3) % current score
+    ADDI    A1, R0, 00AF % X
+    ADDI    A2, R0, 0057 % Y
+    SW      R0, 10 (SP) % color
+    SW      A3, 14 (SP) % opacity
+    ORI     A3, R0, 0 % bool
+    JAL     ~Func:draw_number
+    SW      R0, 18 (SP) % text fx
+    BEQ     S2, R0, .CheckState_4
+    NOP
+    BEQ     R0, R0, .AdvanceTimer_Opacity
+    NOP
+    .CheckState_4 % Stars
+    SLTIU   A1, S1, 3
+    BNE     A1, R0, .End
+    NOP
+    % state >=4
+    %
+    % S1=state
+    %
+    % calculate how many stars to show
+    LABU    A1, 800B0F2E % mapID, use the mapID to get the current map default highscore
+    ORI     A2, R0, 1 % Peach Castle
+    BEQL    A1, A2, .DefaultHighObtained
+    ORI     A1, R0, 30` % Level 1's default highscore
+    ORI     A2, R0, 2 % Toad Town
+    BEQL    A1, A2, .DefaultHighObtained
+    ORI     A1, R0, 40` % Level 2's default highscore
+    %ORI     A3, R0, 3 % Shy Guy
+    %BEQL    A1, A2, .DefaultHighObtained
+    ORI     A1, R0, 45` % Level 3's default highscore
+    .DefaultHighObtained
+    % Se que toda esta funcion esta escrita super horrible, pero la verdad, ya estoy bien
+    % cansado y me quiero ir a dormir lol, y el jam esta a horas de acabarse
+    % ya asta flojera me da escribir en ingles XD
+    LW      V0, 4 (S3) % load your highscore
+    COPY    A3, A1
+    % get 50%
+    ORI     A2, R0, 50`
+    MULT    A3, A2
+    MFLO    A3
+    ORI     A2, R0, 100`
+    DIV     A3, A2
+    MFLO    A2
+    ADDU    A2, A1, A2
+    ADDU    A3, A1, A1
+    % A2=requirement 150%
+    % A3=requirement 200%
+    % 3 Stars - Check if highscore is >= 200% to requirement
+    SLTU    V1, V0, A3
+    LIO     A0, $String_Star_3_BIG
+    BEQ     V1, R0, .DrawStars
+    ORI     S4, R0, 3
+    % 2 Stars - Check if highscore is >= 150% to requirement
+    SLTU    V1, V0, A2
+    LIO     A0, $String_Star_2_BIG
+    BEQ     V1, R0, .DrawStars
+    ORI     S4, R0, 2
+    % 1 Star - Check if highscore is >= to requirement
+    SLTU    V1, V0, A1
+    LIO     A0, $String_Star_1_BIG
+    BEQ     V1, R0, .DrawStars
+    ORI     S4, R0, 1
+    LIO     A0, $String_Star_0_BIG % highscore is < to requirement
+    CLEAR   S4
+    .DrawStars
+    ORI     A1, R0, 0076 % x pos
+    ORI     A2, R0, 006A % y pos
+    % get opacity
+    % state is >=5?
+    SLTIU   S2, S1, 5
+    BNEL    S2, R0, .State4_drawString
+    LH      A3, 0 (S0) % timer
+    ORI     A3, R0, FF % state >=5
+    .State4_drawString
+    JAL     ~Func:draw_string
+    SW      R0, 0014 (SP) % text fx
+    BEQ     S2, R0, .CheckState_5
+    NOP
+    BEQ     R0, R0, .AdvanceTimer_Opacity
+    NOP    
+    .CheckState_5 % play a little sfx
+    ORI     A1, R0, 5
+    BNE     S1, A1, .CheckState_6
+    NOP
+    % play sfx according of how many stars the player got
+    %
+    % S4=Stars
+    % wait until the sound ends
+    LH      A1, 0 (S0) % timer
+    BNE     A1, R0, .State5_SoundPlayed
+    NOP
+    % play sound
+    BEQL    S4, R0, .State5_PlaySFX
+    ORI     A0, R0, 20C3 % sad bandit
+    ORI     A1, R0, 1
+    BEQL    S4, A1, .State5_PlaySFX
+    ORI     A0, R0, 00D1 % item
+    ORI     A1, R0, 2
+    BEQL    S4, A1, .State5_PlaySFX
+    ORI     A0, R0, 00D2 % keyItem
+    ORI     A0, R0, 00D3 % badge    
+    .State5_PlaySFX
+    JAL     ~Func:sfx_play_sound
+    NOP
+    CLEAR   A1 % restart timer
+    .State5_SoundPlayed
+    ADDI    A1, A1, 1
+    SLTIU   A2, A1, 60`
+    BNEL    A2, R0, .End
+    SH      A1, 0 (S0) % timer
+    % move to next state
+    SH      R0, 0 (S0) % timer
+    ORI     A1, R0, 6
+    BEQ     R0, R0, .End
+    SB      A1, 2 (S0) % state
+    .CheckState_6 % last state
+    ORI     A1, R0, 6
+    BNE     S1, A1, .End
+    NOP
+    ORI     A1, R0, 7
+    SB      A1, 2 (S0) % state
+    % S4=Stars
+    BEQ     S4, R0, .ZeroStars
+    NOP
+    % At least 1 star obtained
+    CLEAR	A2
+    LIA		A0, $Script_StarsObtained
+    JAL		~Func:start_script
+    ADDIU	A1, R0, 1
+    BEQ     R0, R0, .End
+    NOP
+    .ZeroStars
+    CLEAR	A2
+    LIA		A0, $Script_ZeroStarsObtained
+    JAL		~Func:start_script
+    ADDIU	A1, R0, 1
+    BEQ     R0, R0, .End
+    NOP
+    .AdvanceTimer_Opacity
+    LH      A0, 0 (S0) % timer
+    ADDIU   A0, A0, 0010
+    SH      A0, 0 (S0) % timer
+    SLTIU   V0, A0, FF
+    BNE     V0, R0, .End
+    NOP
+    % go to next state
+    SH      R0, 0 (S0) % timer
+    LB      A1, 2 (S0) % state
+    ADDI    A1, A1, 1
+    BEQ     R0, R0, .End
+    SB      A1, 2 (S0) % state
+    .End
+    JPOP    R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2, S3, S4
+}
+
+#new:Script $Script_StarsObtained
+{
+    Exec    $UpdateHighscore
+    Call    $ReadAddress ( $Data_Title_Cursor 0 *Var0 6 .False ) % replay (bool)
+    If *Var0 == .True % Replay Mode
+        Call    GotoMap ( "lvl_10" 1 ) % title screen
+    Else
+        Add *Mod_StoryProgress 1
+        Switch *Mod_StoryProgress
+            Case <= 3
+                Set     *Level1_Beaten .True
+                Call    GotoMap ( "lvl_02" 0 ) % Toad Town
+            Case == 4
+                Set     *Level2_Beaten .True
+                Call    GotoMap ( "lvl_03" 0 ) % Shy Guys
+            Case == 5
+                Set     *Level3_Beaten .True
+                Call    GotoMap ( "lvl_04" 0 ) % lava lava
+            Case == 6
+                Call    StopSound ( 0052 )
+                Set     *Level4_Beaten .True
+                Call    GotoMap ( "lvl_05" 0 ) % shiver mountain
+            Case >= 7
+                Set     *Level5_Beaten .True
+                Call    GotoMap ( "lvl_11" 1 ) % game beated
+        EndSwitch
+        Call    $RunFunction ( $SaveGame )
+    EndIf
+    Return
+    End
+}
+
+#new:Script $Script_ZeroStarsObtained
+{
+    Call    StopSound ( 0052 ) % needed because lvl_04
+    Exec    $UpdateHighscore
+    Call    $ReadAddress ( $Data_Title_Cursor 0 *Var0 6 .False ) % replay (bool)
+    If *Var0 == .True % Replay Mode
+        Call    GotoMap ( "lvl_10" 1 ) % title screen
+    Else
+        Call    ShowMessageAtScreenPos ( $String_ZeroStars_1 A0 28 )
+        Call    ShowChoice    ( 001E001D ) % yes no
+        If *Var0 == 1 % no
+            Call    CloseMessage
+            Wait    1
+            Call    ShowMessageAtScreenPos ( $String_GoBackTitleScreen A0 28 )
+            Call    ShowChoice    ( 001E001D ) % yes no
+            If *Var0 == 1 % no
+                Call    CloseMessage
+                Wait    1
+                Jump    $Script_ZeroStarsObtained
+            Else % yes
+                Call    CloseMessage
+                Wait    1
+                Call    PlaySound ( 00D6 ) % return to title screen
+                Call    GotoMap ( "lvl_10" 0 ) % title screen
+            EndIf
+        Else % yes
+            Call    CloseMessage
+            Wait    1
+            Exec    $Script_ReloadMap
+        EndIf
+    EndIf
+    Return
+    End
+}
+
+#new:Script $UpdateHighscore
+{
+    Call    $ReadAddress ( 800B0F2E 0 *Var0 .False .False ) % get mapID
+    Switch *Var0
+        Case == 1 % Peach Castle
+            Set *Var1 8035603A  % Level1_Highscore
+        Case == 2 % Toad Town
+            Set *Var1 8035603C  % Level2_Highscore
+        Case == 3 % Shy Guys
+            Set *Var1 8035603E  % Level3_Highscore
+        Case == 4 % Lavalava
+            Set *Var1 80356040  % Level4_Highscore
+        Case == 5 % Shiver Mountain
+            Set *Var1 80356042  % Level5_Highscore
+    EndSwitch
+    Call    $ReadAddress ( $Minigame_Data 2 *Var2 4 .False ) % get score
+    Call    $ReadAddress ( *Var1 1 *Var3 .False .False ) % get highscore
+    If *Var2 > *Var3 % save new highscore
+        Call    $WriteAddress ( *Var1 1 *Var2 .False .False )
+        Call    $RunFunction ( $SaveGame )
+    EndIf
+    Return
+    End
+}
+
+#string $String_ZeroStars_1
+{
+[Style Inspect][DelayOff]
+You need [SaveColor][Color:07]at least one star[RestoreColor], to go[BR]
+to the next level.[BR]
+[Wait][Next]
+Do you want to try once again?
+[Yield][End]
+}
+
+#string $String_GoBackTitleScreen
+{
+[Style Inspect][DelayOff]
+Do you want to go back to the[BR]
+title screen?[BR]
+[Yield][End]
+}
+
+#export:Function $SaveGame
+{
+	ADDIU     SP, SP, FFD0
+	LIA       A0, $ASCII_lvl10
+	SW        S0, 18 (SP)
+	LIA       S0, 8007419C
+	ADDIU     A1, SP, 10
+	SW        RA, 28 (SP)
+	SW        S3, 24 (SP)
+	SW        S2, 20 (SP)
+	SW        S1, 1C (SP)
+	LW        V0, 0 (S0)
+	LHU       S1, 86 (V0)
+	LHU       S2, 8C (V0)
+	LHU       S3, 8E (V0)
+	JAL       ~Func:get_map_IDs_by_name
+	ADDIU     A2, SP, 12
+	LW        V1, 0 (S0)
+	LHU       V0, 10 (SP)
+	LHU       A1, 12 (SP)
+	LBU       A0, 166 (V1)
+	SH        V0, 86 (V1)
+	ADDIU     V0, R0, 0 % entry ID
+	SH        A1, 8C (V1)
+	JAL       ~Func:fio_save_game
+	SH        V0, 8E (V1)
+	LW        V1, 0 (S0)
+	SH        S1, 86 (V1)
+	SH        S2, 8C (V1)
+	SH        S3, 8E (V1)
+	LW        RA, 28 (SP)
+	LW        S3, 24 (SP)
+	LW        S2, 20 (SP)
+	LW        S1, 1C (SP)
+	LW        S0, 18 (SP)
+	ADDIU     V0, R0, 2
+	JR        RA
+	ADDIU     SP, SP, 30
+}
+
+#new:ASCII $ASCII_lvl10
+{ "lvl_10" }
+
+#export:Script:Map $Script_ClearMinigameData
+{
+    % Clear data
+    Set   *PauseGame .False
+	Call  $WriteAddress ( $PauseByte 0 .False .False .False ) % clear pause byte
+	Call  $WriteAddress ( $Minigame_Data 2 .False 	4 .False ) % clear score
+	Call  $RunFunction ( $clear_peach_status )	% clear peach's item
+    Call  SetPlayerAnimation ( 000A0001 ) % idle
+    Call  $RunFunction ( $DeleteEntireItemData ) % clear all new items data
+	Call  $RunFunction ( $clear_queue ) % clear queue and all orders' data	
+	Call  $WriteAddress ( $GoTimer 2 .False .False .False )
+    Return
+    End
+}
+
+%%%
+
+#string $String_Go
+{
+[Size 40][Right 33][Up 12]GO!
+[End]
+}
+
+#new:ASCII $ASCII_Buffer
+{
+"          "
+}
+
+#new:ASCII $ASCII_Format_Byte
+{
+"%3u"
+}
+
+#string $String_Buffer_Size25
+{
+[Size 25]             [End]
+}
+
+%===================
+% Function by Rain
+%===================
+
+#new:Function $ConvertAsciiToPM64String %takes args a0, a1
+{
+% a0 = where to store converted result
+% a1 = where to read from
+PUSH a0, a1
+ORI t1, r0, 0020 %space
+.loop
+LB t0, 0000 (a1)
+BEQ t0, r0, .endofascii
+NOP
+BEQ t0, t1, .isspace
+NOP
+ADDIU t0, t0, FFE0 %subtract 0x20 from ascii to get pm64 string hex
+.store
+SB t0, 0008 (a0)
+ADDIU a0, a0, 0001
+BEQ r0, r0, .loop
+ADDIU a1, a1, 0001
+.endofascii
+ORI t0, r0, 00FD %pm64 string terminator
+SB t0, 0008 (a0) %store terminator
+POP a0, a1
+JR RA
+NOP
+.isspace
+BEQ r0, r0, .store
+ORI t0, r0, 00F7
+}
+
+%====================
+
+#new:Script $Script_SuspendAll
+{
+    SetGroup 0
+    SuspendAll 2
+    Call    DisablePlayerInput ( .True )
+    Return
+    End
+}
+
+#new:Script $Script_ResumeAll
+{
+    ResumeAll 2
+    Call    DisablePlayerInput ( .False )
+    Return
+    End
+}
+
+#new:Data $Data_PauseMenu
+{
+    00b % cursor
+    00b % state
+    00b % sub-state
+    00b % timer
+}
+
+% Pause the game
+#export:Function $CookingMinigame_UpdatePause
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1
+    LIO     A1, *PauseGame
+    JAL     ~func:get_variable
+    RESERVED
+    BEQ     V0, R0, .End
+    NOP
+    % the game is paused, draw everything from the pause menu
+    JAL     $Pause_DrawContent
+    NOP
+    JAL     $Pause_TrackInputs
+    NOP
+    .End
+    JAL     $Pause_Update_PauseUnpause
+    NOP
+    POP     RA, A0, A1, A2, A3, V0, V1
+    JR      RA
+    NOP
+}
+
+#new:Function $Pause_DrawContent
+{
+    PUSH    R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2
+    LIO     S2, $Data_PauseMenu
+    LBU     V0, 2 (S2) % get pause menu's sub-state
+    ORI     V1, R0, 1
+    BEQ     V0, V1, .Draw_ConfirmationMessage
+    NOP
+    LIO     A0, $String_Continue
+    ORI     S0, R0, 0083 % x pos
+    ORI     S1, R0, 005A % y pos
+    COPY    A1, S0 % x
+    COPY    A2, S1 % y
+    % shake cursor
+    LBU     A3, 0 (S2) % load cursor pos
+    CLEAR   V0
+    BEQL    A3, R0, .Option1_DrawString
+    ORI     V0, R0, 2 % shake text (fx)
+    .Option1_DrawString
+    SW      V0, 0014 (SP) % text fx
+    JAL     ~Func:draw_string
+    ORI     A3, R0, 00FF
+    %
+    LIO     A0, $String_Retry
+    ADDI    S0, S0, 000A % x pos
+    ADDI    S1, S1, 0013 % y pos
+    COPY    A1, S0 % x
+    COPY    A2, S1 % y
+    % shake cursor
+    LBU     A3, 0 (S2) % load cursor pos
+    CLEAR   V0
+    ORI     V1, R0, 1
+    BEQL    A3, V1, .Option2_DrawString
+    ORI     V0, R0, 2 % shake text (fx)
+    .Option2_DrawString
+    SW      V0, 0014 (SP) % text fx
+    JAL     ~Func:draw_string
+    ORI     A3, R0, 00FF
+    %
+    LIO     A0, $String_Exit
+    ADDI    S0, S0, 0007 % x pos
+    ADDI    S1, S1, 0013 % y pos
+    COPY    A1, S0 % x
+    COPY    A2, S1 % y
+    % shake cursor
+    LBU     A3, 0 (S2) % load cursor pos
+    CLEAR   V0
+    ORI     V1, R0, 2
+    BEQL    A3, V1, .Option3_DrawString
+    ORI     V0, R0, 2 % shake text (fx)
+    .Option3_DrawString
+    SW      V0, 0014 (SP) % text fx
+    JAL     ~Func:draw_string
+    ORI     A3, R0, 00FF
+    % Draw Camera Strings
+    LIO     A0, $String_CameraMode
+    ORI     A1, R0, 0013 % x pos
+    ORI     A2, R0, 00C6 % y pos
+    CLEAR   V0
+    SW      V0, 0014 (SP) % text fx
+    JAL     ~Func:draw_string
+    ORI     A3, R0, 00FF
+    %
+    LIO     A1, *CameraMode
+    JAL     ~func:get_variable
+    RESERVED
+    LIO     A0, $String_Follow
+    BEQ     V0, R0, .DrawCameraMode
+    NOP
+    LIO     A0, $String_Fixed
+    .DrawCameraMode
+    ORI     A1, R0, 0061 % x pos
+    ORI     A2, R0, 00C6 % y pos
+    CLEAR   V0
+    SW      V0, 0014 (SP) % text fx
+    JAL     ~Func:draw_string
+    ORI     A3, R0, 00FF
+    BEQ     R0, R0, .End
+    NOP
+    %============================
+    .Draw_ConfirmationMessage
+    %============================
+    LIO     A0, $String_AreYouSure
+    ORI     A1, R0, 0075 % x pos
+    ORI     A2, R0, 005A % y pos
+    SW      R0, 0014 (SP) % text fx
+    JAL     ~Func:draw_string
+    ORI     A3, R0, 00FF
+    %
+    LIO     A0, $String_Yes
+    ORI     S0, R0, 009A % x pos
+    ORI     S1, R0, 0070 % y pos
+    COPY    A1, S0 % x
+    COPY    A2, S1 % y
+    % shake cursor
+    LBU     A3, 0 (S2) % load cursor pos
+    CLEAR   V0
+    BEQL    A3, R0, .Option2_1_DrawString
+    ORI     V0, R0, 2 % shake text (fx)
+    .Option2_1_DrawString
+    SW      V0, 0014 (SP) % text fx
+    JAL     ~Func:draw_string
+    ORI     A3, R0, 00FF
+    %
+    LIO     A0, $String_No
+    ADDI    S0, S0, 0005 % x pos
+    ADDI    S1, S1, 0013 % y pos
+    COPY    A1, S0 % x
+    COPY    A2, S1 % y
+    % shake cursor
+    LBU     A3, 0 (S2) % load cursor pos
+    CLEAR   V0
+    ORI     V1, R0, 1
+    BEQL    A3, V1, .Option2_2_DrawString
+    ORI     V0, R0, 2 % shake text (fx)
+    .Option2_2_DrawString
+    SW      V0, 0014 (SP) % text fx
+    JAL     ~Func:draw_string
+    ORI     A3, R0, 00FF
+    .End
+    POP     R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2
+    JR      RA
+    NOP
+}
+
+#new:Function $Pause_TrackInputs
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S0, F4, F6
+    LIO     S0, $Data_PauseMenu
+    LABU    A0, 80074045 % multi-frame inputs[1]
+    %==========
+    % joystick
+    %==========
+    ANDI    A1, A0, 2 % bit1 % down stick
+    BNE     A1, R0, .UpdateCursorPos
+    CLEAR   A2
+    ANDI    A1, A0, 1 % bit0 % up stick
+    BNE     A1, R0, .UpdateCursorPos
+    ORI     A2, R0, 1
+    BEQ     R0, R0, .buttons
+    NOP
+    .UpdateCursorPos
+    % A2 = 0 % Move cursor downwards
+    % A2 = 1 % Move cursor upwards
+    LBU     V0, 0 (S0) % load cursor pos
+    BEQ     A2, R0, .MoveDownwards
+    NOP
+    %==========
+    .MoveUpwards
+    %==========
+    % check if the confirmation message is on screen
+    LBU     A0, 2 (S0) % get pause menu's sub-state
+    ORI     A1, R0, 1
+    BNE     A0, A1, .FirstMenu_MoveUp
+    NOP
+    %===
+    % confirmation is on screen
+    %===
+    ADDI    V0, V0, -1
+    BLTZL   V0, .WriteNewCursorPos
+    ORI     V0, R0, 1
+    BEQ     R0, R0, .WriteNewCursorPos
+    NOP
+    .FirstMenu_MoveUp
+    ADDI    V0, V0, -1
+    BLTZL   V0, .WriteNewCursorPos
+    ORI     V0, R0, 2
+    BEQ     R0, R0, .WriteNewCursorPos
+    NOP
+    %==========
+    .MoveDownwards
+    %==========
+    % check if the confirmation message is on screen
+    LBU     A0, 2 (S0) % get pause menu's sub-state
+    ORI     A1, R0, 1
+    BNE     A0, A1, .FirstMenu_MoveDown
+    NOP
+    %===
+    % confirmation is on screen
+    %===
+    ADDI    V0, V0, 1
+    SLTI    V1, V0, 2
+    BEQL    V1, R0, .WriteNewCursorPos
+    CLEAR   V0
+    BEQ     R0, R0, .WriteNewCursorPos
+    NOP
+    .FirstMenu_MoveDown
+    ADDI    V0, V0, 1
+    SLTI    V1, V0, 3
+    BEQL    V1, R0, .WriteNewCursorPos
+    CLEAR   V0
+    .WriteNewCursorPos
+    SB      V0, 0 (S0) % write new cursor pos
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 00C7 % cursor moves
+    %==========
+    .buttons
+    %==========
+    % Check A button
+    LABU    A0, 80074036 % 1-time inputs[2]
+    ANDI    A1, A0, 80 % bit7 % A button
+    BEQ     A1, R0, .Check_B_Button
+    NOP
+    % A button was pressed
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 00C9 % accept
+    LBU     V0, 0 (S0) % get cursor pos
+    LBU     V1, 2 (S0) % sub-state
+    % check if the confirmation message is on screen
+    ORI     A3, R0, 1
+    BEQ     V1, A3, .ExitMinigame
+    NOP
+    BEQ     V0, R0, .UnpauseGame
+    ORI     V1, R0, 1
+    BEQ     V0, V1, .RetryMiniGame
+    ORI     V1, R0, 2
+    BNE     V0, V1, .End
+    NOP
+    % show confirmation message
+    SB      A3, 2 (S0) % pause's menu sub-state
+    BEQ     R0, R0, .End
+    SB      R0, 0 (S0) % cursor pos
+    .UnpauseGame
+    JAL     $UnpauseGame
+    NOP
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 00C6 % unpause
+    BEQ     R0, R0, .End
+    NOP
+    .RetryMiniGame
+    CLEAR   A2
+    LIA	    A0, $Script_ReloadMap
+    JAL	    ~Func:start_script
+    ADDIU	A1, R0, 1
+    JAL     $UnpauseGame_butDontResume
+    NOP
+    BEQ     R0, R0, .End
+    NOP
+    .ExitMinigame
+    LBU     V0, 0 (S0) % get cursor pos
+    BNE     V0, R0, .Exit_GoBack
+    NOP
+    % Exit Minigame
+    %
+    CLEAR   A2
+    LIA	    A0, $Script_GoBackToTitleScreen
+    JAL	    ~Func:start_script
+    ADDIU	A1, R0, 1
+    JAL     $UnpauseGame_butDontResume
+    NOP
+    BEQ     R0, R0, .End
+    NOP
+    .Exit_GoBack
+    ORI     V1, R0, 2 % Exit
+    SB      V0, 0 (S0) % cursor pos
+    SB      R0, 0 (S0)
+    .Check_B_Button
+    % check if the confirmation message is on screen
+    ORI     A1, R0, 1
+    LBU     V0, 2 (S0) % pause's menu sub-state
+    BEQ     V0, R0, .Check_Z_Button
+    NOP
+    % it is, start tracking the b button
+    ANDI    A1, A0, 40 % bit6 % B button
+    BEQ     A1, R0, .End
+    NOP
+    % B button was pressed
+    %
+    % restore cursor pos to previous state
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 00CA % cancel
+    SB      R0, 2 (S0) % pause's menu sub-state
+    ORI     V0, R0, 2
+    SB      V0, 0 (S0) % cursor pos / 2 = Exit
+    BEQ     R0, R0, .End
+    NOP
+    .Check_Z_Button
+    ANDI    A1, A0, 20 % bit5 % Z button
+    BEQ     A1, R0, .End
+    NOP
+    % Z button was pressed
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 000F % swap partners
+    LIO     A1, *CameraMode
+    JAL     ~Func:get_variable
+    RESERVED
+    BEQ     V0, R0, .FixedCamera
+    NOP
+    ORI     A0, R0, 0
+    JAL     ~Func:set_zone_enabled
+    ORI     A1, R0, 1
+    ORI     A0, R0, 1
+    JAL     ~Func:set_zone_enabled
+    ORI     A1, R0, 1
+    ORI     A0, R0, 2
+    JAL     ~Func:set_zone_enabled
+    CLEAR   A1
+    BEQ     R0, R0, .Camera_SetFlag
+    CLEAR   A2
+    .FixedCamera
+    ORI     A0, R0, 0
+    JAL     ~Func:set_zone_enabled
+    CLEAR   A1
+    ORI     A0, R0, 1
+    JAL     ~Func:set_zone_enabled
+    CLEAR   A1
+    ORI     A0, R0, 2
+    JAL     ~Func:set_zone_enabled
+    ORI     A1, R0, 1
+    ORI     A2, R0, .True
+    .Camera_SetFlag
+    LIO     A1, *CameraMode
+    JAL     ~Func:set_variable
+    RESERVED
+    % force camera zone to update
+    LIO     A0, 800B2224
+    LWC1	F4, 0000 (A0) % get player posX
+    LIF     F6, 1.0
+    ADD.S   F6, F4, F6
+    SWC1    F6, 0000 (A0) % update posX
+    .End
+    POP     RA, A0, A1, A2, A3, V0, V1, S0, F4, F6
+    JR      RA
+    NOP
+}
+
+#new:Script:Map $Script_GoBackToTitleScreen
+{
+    % Player was playing in replay mode?
+    Call    $ReadAddress ( $Data_Title_Cursor 0 *Var0 6 .False ) % replay (bool)
+    If *Var0 == .True % Replay Mode
+        Call    GotoMap ( $ASCII_lvl_10 1 )
+    Else
+        Call    GotoMap ( $ASCII_lvl_10 0 )
+    EndIf
+    Call    PlaySound ( 00D6 ) % return to title screen
+    Return
+    End
+}
+
+#new:Script:Map $Script_ReloadMap
+{
+    Call    $ReadAddress ( 800740AB 0 *Var0 .False .False ) % current map's areaID
+    Call    GetMapID ( *Var1 )
+    Call    GotoMapByID ( *Var0 *Var1 0 )
+    Return
+    End
+}
+
+#new:ASCII $ASCII_lvl_10
+{ "lvl_10" }
+
+% This function tracks the START to pause or unpause the game
+#new:Function $Pause_Update_PauseUnpause
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, F4
+    LABU    T0, 80074036 % 1 Frame Inputs
+    ANDI    T0, T0, 10 % bit4 = Start button
+    BEQ     T0, R0, .End
+    NOP
+    LIO     A1, *PauseGame
+    JAL     ~func:get_variable
+    RESERVED
+    BNE     V0, R0, .Unpause
+    CLEAR   A2 % unpause
+    % pause the game
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 00C5 % pause
+    ORI     V0, R0, 1 % pause
+    SAB     V0, $PauseByte
+    % suspend everything
+    CLEAR	A2
+    LIA		A0, $Script_SuspendAll
+    JAL		~Func:start_script
+    ADDIU	A1, R0, 1
+    ORI     V0, R0, 4
+    SAB     V0, 80159AE5 % music volume
+    % adjust screen brightness
+    SAB     R0, 80156903 % remove brightness lock
+    LIF     F4, 50.0
+    SAF     F4, 80156904 % screen brightness (float)
+    % clear cursor data
+    SAW     R0, $Data_PauseMenu
+    BEQ     R0, R0, .UpdatePause
+    ORI     A2, R0, 1 % pause
+    .Unpause
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 00C6 % unpause
+    SAB     R0, $PauseByte
+    JAL     $UnpauseGame
+    NOP
+    BEQ     R0, R0, .End
+    NOP
+    .UpdatePause
+    LIO     A1, *PauseGame
+    JAL     ~func:set_variable
+    RESERVED
+    .End
+    JPOP    RA, A0, A1, A2, A3, V0, V1, F4
+}
+
+% Update the order queue on top of the screen.
+%
+% Basically draw and update all boxes animations.
+#new:Function $CookingMinigame_UpdateOrdersQueue
+{
+    PUSH    R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2, S3, S4
+    LABU    A0, $PauseByte
+    BNE     A0, R0, .End
+    NOP
+    % check if any new orders has entered the queue
+    CLEAR   V0
+    LIO     S0, $Orders_Queue
+    ADDI    S0, S0, 1C % go to last pos
+    %=============
+    .InitNewOrder
+    %=============
+    LIO     A0, $Order1_Data
+    BEQ     V0, R0, .InitOrder_GetState
+    ORI     V1, R0, 1
+    LIO     A0, $Order2_Data
+    BEQ     V0, V1, .InitOrder_GetState
+    ORI     V1, R0, 2
+    LIO     A0, $Order3_Data
+    BEQ     V0, V1, .InitOrder_GetState
+    ORI     V1, R0, 3
+    LIO     A0, $Order4_Data
+    BEQ     V0, V1, .InitOrder_GetState
+    ORI     V1, R0, 4
+    BEQ     V0, V1, .MoveOrders
+    NOP
+    .InitOrder_GetState
+    LB      A1, 6 (A0) % order state
+    BNE     A1, R0, .InitNewOrder
+    ADDIU   V0, V0, 1 % check next order
+    % the order is enabled, check if has been already initializated
+    LBU     A2, 7 (A0) % position in queue
+    BNE     A2, R0, .InitNewOrder
+    NOP
+    % this order has been enabled but still isn't inside the queue
+    JAL     $OrderQueue_NewOrdersCanBeAdded
+    NOP
+    BEQ     V0, R0, .MoveOrders % there's too many orders or position 8th in queue isn't free, wait more time to enable this order
+    NOP
+    ORI     V0, R0, 8 % put order to the rightmost part of the screen
+    SB      V0, 7 (A0)
+    SW      A0, 10 (SP) % push A0
+    SW      S0, 14 (SP) % push S0
+    % create order's recipe icon
+    JAL     $GetItemHudScript_byItemID
+    LHU     A0, 2 (A0) % order's itemID
+    JAL     $CreateIcon
+    COPY    A0, V0
+    JAL     $GetOrderIconTableIndex
+    LW      A0, 10 (SP) % get orderData*
+    COPY    A0, V0 % dataIndex
+    JAL     $IconTable_SaveIndex_byIndex
+    COPY    A1, S0 % iconIndex
+    LW      A0, 10 (SP) % pop A0
+    LW      S0, 14 (SP) % pop S0
+    LIO     A1, $Orders_Queue
+    BEQ     R0, R0, .MoveOrders
+    SW      A0, 1C (A1) % save this order's data in queue_pos8
+    %=============
+    .MoveOrders
+    %
+    % Update the boxes' position offsets
+    %=============
+    COPY    A2, S0
+    LIO     A1, $Orders_Queue
+    ADDI    A1, A1, -4
+    .Loop_MoveOrder
+    LW      A0, 0 (A2)
+    BNE     A0, R0, .MoveOrder_UpdateTimer
+    NOP
+    BEQ     A2, A1, .DrawOrders % all orders has been already checked?
+    NOP
+    BEQ     R0, R0, .Loop_MoveOrder
+    ADDI    A2, A2, -4 % read next order
+    .MoveOrder_UpdateTimer
+    % decrease order timer
+    LHU     T0, 4 (A0) % order timer
+    LB      T1, 6 (A0) % order state
+    ADDI    T0, T0, -1
+    BGEZL   T0, .MoveOrder_CheckNextPos
+    SH      T0, 4 (A0)
+    % timer has reached zero
+    BNE     T1, R0, .MoveOrder_CheckNextPos
+    NOP
+    % Box State = 00 = Waiting order
+    %
+    % Set order state as 02 (Wrong)
+    ORI     T0, R0, 40` % wait 40 frames for the order to leave
+    SH      T0, 4 (A0) % orderTimer
+    ORI     T0, R0, 2 % wrong
+    SB      T0, 6 (A0) % orderState
+    % decrease points
+    LIO     A3, $Minigame_Data
+    LW      V0, 4 (A3) % get score
+    ADDI    V0, V0, -10`
+    BLTZL   V0, .WrongOrder_DecreasePoints
+    CLEAR   V0
+    .WrongOrder_DecreasePoints
+    SW      V0, 4 (A3) % save new score
+    JAL     $play_sound
+    ORI     A0, R0, 021D % error sfx
+    .MoveOrder_CheckNextPos
+    % check if this order can move more to the left
+    JAL     $Queue_CheckNextPosition
+    NOP
+    BGTZL   V0, .MoveOrder_UpdateOffset
+    NOP
+    % right now this order can't move more to the left
+    BEQ     R0, R0, .Loop_MoveOrder
+    ADDI    A2, A2, -4 % read next order
+    .MoveOrder_UpdateOffset
+    %
+    % Update box position offset
+    SH      R0, A (A0) % set timer back to zero
+    LHU     T0, 8 (A0) % box's PosX
+    ADDIU   T0, T0, 15` % box speed
+    SLTIU   T1, T0, 4B
+    BEQ     T1, R0, .MoveOrder_DecreasePosIndex
+    NOP
+    SH      T0, 8 (A0) % box's PosX
+    BEQ     R0, R0, .Loop_MoveOrder
+    ADDI    A2, A2, -4 % read next order
+    .MoveOrder_DecreasePosIndex
+    % reset offset and decrease positionIndex (orderData(0x07))
+    SH      R0, 8 (A0) % set offset back to zero
+    LBU     T1, 7 (A0) % position in queue
+    ADDI    T1, T1, -1
+    ORI     T2, R0, 1 % leftmost position in the queue
+    BEQ     T1, T2, .MoveOrder_ClearOrder
+    NOP
+    SB      T1, 7 (A0)
+    % move order one position to the left in the queue
+    LW      T0, 0 (A2)
+    SW      R0, 0 (A2) % clear previous pos
+    ADDI    A2, A2, -4 % move to the left
+    SW      T0, 0 (A2)
+    % check next order
+    BEQ     R0, R0, .Loop_MoveOrder
+    ADDI    A2, A2, -4 % read next order
+    .MoveOrder_ClearOrder
+    % Order has reached the last part of the queue, remove it and clear all his data
+    %
+    % clear $OrderX_Data
+    SW      R0, 0 (A0)
+    SW      R0, 4 (A0)
+    ORI     V0, R0, FF % Order disabled
+    SB      V0, 6 (A0) % orderState
+    SW      R0, 8 (A0)
+    SW      R0, 0 (A2) % clear data pointer from $Orders_Queue
+    % remove order icon
+    JAL     $RemoveOrderIcon
+    NOP
+    BEQ     R0, R0, .Loop_MoveOrder
+    ADDI    A2, A2, -4 % read next order
+    %=============
+    .DrawOrders
+    %
+    % Draw each box
+    %=============
+    LIO     S1, $Orders_Queue
+    ADDI    S1, S1, -4
+    % S0 = $Orders_Queue(last_positionIndex)
+    %
+    % read all data from the queue and draw each box
+    ORI     A0, R0, 000C % posX
+    .Loop_DrawBox
+    LW      A2, 0 (S0)
+    BEQ     S0, S1, .End % all data from $Orders_Queue has been read
+    NOP
+    BEQ     A2, R0, .Loop_DrawBox
+    ADDI    S0, S0, -4
+    LBU     A1, 7 (A2) % positionIndex
+    ORI     A0, R0, 4A % each index is a +4A to the X Offset
+    MULT    A0, A1
+    MFLO    A0
+    % substract box X offset
+    LHU     A1, 8 (A2) % box's posX
+    ADDI    T0, R0, -1
+    MULT    A1, T0
+    MFLO    A1
+    ADD     A0, A0, A1 % sum index - X offset
+    % left < -0xD2 - 0x172 % - > right
+    ADDI    A1, R0, -D2 % leftmost position from the queue
+    ADD     A0, A1, A0 % substract x offset
+    COPY    S2, A0
+    COPY    S3, A2
+    %=============
+    % draw subBox
+    ORI     A1, R0, 0014 % posY
+    ORI     A2, R0, 004A % sizeX
+    ORI     A3, R0, 0034 % sizeY
+    ORI     T0, R0, 1D % style
+    JAL     $DrawBox
+    ORI     T1, R0, FF % opacity
+    %=============
+    % draw cakeBase box
+    COPY    A0, S2
+    ORI     A1, R0, 0014 % posY
+    ORI     A2, R0, 0017 % sizeX
+    ORI     A3, R0, 0034 % sizeY
+    ORI     T0, R0, 1D % style
+    JAL     $DrawBox
+    ORI     T1, R0, FF % opacity
+    %=============
+    % Draw Main Box
+    %
+    % set boxStyle
+    COPY    A2, S3
+    LBU     T1, 6 (A2) % box state
+    % is orderState 0?
+    BEQ     T1, R0, .DrawBox_StyleSet
+    ORI     T0, R0, F % 0=Awaiting order
+    % is orderState 1?
+    ADDI    T0, R0, 1
+    BEQ     T1, T0, .Order_DrawPointsObtained
+    ORI     T0, R0, 17 % 1=Correct
+    % wasn't 0 or 1
+    ORI     T0, R0, 18 % 2=Wrong
+    SW      T0, 18 (SP) % save style
+    LIO     A0, $String_Minus10
+    BEQ     R0, R0, .DrawObtained_StringGet
+    RESERVED
+    .Order_DrawPointsObtained
+    % draw a little number saying how many points the player got
+    SW      T0, 18 (SP) % save style
+    JAL     $GetOrderTimerColor
+    COPY    A0, A2
+    LIO     A0 $String_Plus20
+    BEQ     V0, R0, .DrawObtained_StringGet
+    RESERVED
+    ORI     A1, R0, 1 % yellow
+    LIO     A0 $String_Plus15
+    BEQ     V0, A1, .DrawObtained_StringGet
+    RESERVED
+    LIO     A0 $String_Plus10 % red
+    .DrawObtained_StringGet
+    % get opacity and y offset by reading the timer
+    LHU     V1, 4 (A2) % timer
+    ORI     A2, R0, 0049 % y % default y pos
+    SLTIU   V0, V1, 30`
+    BNE     V0, R0, .DrawObtained_CheckOffsetState2
+    NOP
+    % String will unfade
+    %
+    % V1=timer
+    %
+    % V1 is >30
+    COPY    A1, V1
+    SUBI    A1, A1, 30`
+    SUB     A2, A2, A1 % y pos
+    % get opacity
+    ORI     A3, R0, FF % max opacity
+    ORI     T0, R0, 1B
+    MULT    T0, A1
+    MFLO    T0
+    BEQ     R0, R0, .DrawPointsGot
+    SUB     A3, A3, T0 % opacity
+    .DrawObtained_CheckOffsetState2
+    SLTIU   V0, V1, 11`
+    BEQL    V0, R0, .DrawPointsGot % static text
+    ORI     A3, R0, FF % opacity
+    % string will fade
+    %
+    % V1=timer
+    %
+    % V1 is <10
+    ORI     A1, R0, 10`
+    SUB     A1, A1, V1
+    SUB     A2, A2, A1 % y pos
+    % get opacity
+    ORI     A3, R0, FF % max opacity
+    ORI     T0, R0, 19
+    MULT    T0, A1
+    MFLO    T0
+    SUB     A3, A3, T0 % opacity
+    .DrawPointsGot
+    ADDI    A1, S2, 1C % x
+    ORI     V0, R0, 2 % shake text (fx)
+    SW      R0, 10 (SP) % text color
+    JAL     ~Func:draw_string
+    SW      V0, 14 (SP) % text fx
+    LW      T0, 18 (SP) % restore style
+    .DrawBox_StyleSet
+    COPY    A0, S2 % posX
+    ORI     A1, R0, 0014 % posY
+    ORI     A2, R0, 004A % sizeX
+    ORI     A3, R0, 001F % sizeY
+    JAL     $DrawBox
+    ORI     T1, R0, FF % opacity
+    %=============
+    % draw icons
+    %
+    % draw order's icon
+    JAL     $GetOrderIconTableIndex
+    COPY    A0, S3 % orderData*
+    JAL     $IconTable_GetIndex_byIndex
+    COPY    A0, V0 % dataIndex
+    COPY    S4, V0
+    COPY    A0, S4 % iconIndex
+    ADDI    A1, S2, 0025 % posX
+    JAL	    ~Func:set_hud_element_render_pos
+    ORI     A2, R0, 0023 % posY
+    %================
+    % subBox area
+    %
+    % draw cakeBase
+    JAL     $IconTable_GetIndex_byItemID
+    ORI     A0, R0, 015F % .Item:CakeBare
+    COPY    A0, V0 % iconIndex
+    ADDI    A1, S2, 000A % posX
+    JAL     $DrawIcon_SubItem
+    ORI     A2, R0, 003B % posY
+    % draw subItems
+    JAL     $GetRecipe_subItemsIDs
+    LH      A0, 2 (S3) % order itemID
+    % draw subItem1
+    LW      A0, 10 (SP) % get subItem1_ID
+    BEQ     A0, R0, .DrawIcon_SubItem2
+    NOP
+    JAL     $IconTable_GetIndex_byItemID
+    NOP
+    COPY    A0, V0 % iconIndex
+    ADDI    A1, S2, 001F % posX
+    JAL     $DrawIcon_SubItem
+    ORI     A2, R0, 003B % posY
+    .DrawIcon_SubItem2
+    LW      A0, 14 (SP) % get subItem2_ID
+    BEQ     A0, R0, .DrawIcon_SubItem3
+    NOP
+    JAL     $IconTable_GetIndex_byItemID
+    NOP
+    COPY    A0, V0 % iconIndex
+    ADDI    A1, S2, 002F % posX
+    JAL     $DrawIcon_SubItem
+    ORI     A2, R0, 003B % posY
+    .DrawIcon_SubItem3
+    LW      A0, 18 (SP) % get subItem3_ID
+    BEQ     A0, R0, .DrawTimer
+    NOP
+    JAL     $IconTable_GetIndex_byItemID
+    NOP
+    COPY    A0, V0 % iconIndex
+    ADDI    A1, S2, 003F % posX
+    JAL     $DrawIcon_SubItem
+    ORI     A2, R0, 003B % posY
+    %=============
+    % draw timer
+    .DrawTimer
+    LW      A3, 4 (S0)
+    LB      A0, 6 (A3) % order state
+    BNE     A0, R0, .RenderIcon_Order
+    NOP
+    % state is "awaiting order", draw the timer
+    COPY    A0, S2 % posX
+    % get posX
+    LHU     A2, 4 (A3) % order's timer
+    % get percentage
+    ORI     T0, R0, 100`
+    MULT    A2, T0
+    MFLO    A2
+    % All orders use F00 frames as timer
+    ORI     T1, R0, 0F00
+    DIV     A2, T1
+    MFLO    A2
+    % A2 = timer's percentage
+    %
+    % Now according to that percentage get the
+    % equivalent in box sizeX
+    COPY    T2, A2
+    ORI     T1, R0, 4A % max box size
+    MULT    A2, T1
+    MFLO    A2
+    ORI     T0, R0, 100`
+    DIV     A2, T0
+    MFLO    A2 % sizeX
+    % get style
+    ADDIU   A1, S0, 4
+    LW      A1, 0 (A1) % current order data
+    LIO     A3, $Order1_Data
+    LIO     T3, $BoxData_White1 % box's style data
+    BEQ     A1, A3 .Timer_StyleSet
+    ORI     T0, R0, 19 % Order1's timer box's style
+    LIO     A3, $Order2_Data
+    LIO     T3, $BoxData_White2
+    BEQ     A1, A3 .Timer_StyleSet
+    ORI     T0, R0, 1A
+    LIO     A3, $Order3_Data
+    LIO     T3, $BoxData_White3
+    BEQ     A1, A3 .Timer_StyleSet
+    ORI     T0, R0, 1B
+    LIO     A3, $Order4_Data
+    LIO     T3, $BoxData_White4
+    BEQ     A1, A3 .Timer_StyleSet
+    ORI     T0, R0, 1C
+    .Timer_StyleSet
+    % check if the timer should be white, yellow or red
+    %
+    % T2=timer's filled percentage
+    % T3=box's style data
+    SLTI    A1, T2, 66`
+    BEQ     A1, R0, .RecolorTimer_White
+    SLTI    A1, T2, 33`
+    BEQ     A1, R0, .RecolorTimer_Yellow
+    NOP
+    .RecolorTimer_Red
+    % write color 1 & 2 data
+    ADDI    A1, R0, FF
+    SB      A1, 3 (T3)
+    ORI     A1, R0, FFFF
+    SW      A1, 4 (T3)
+    ORI     A1, R0, FF00
+    SW      A1, 8 (T3)
+    BEQ     R0, R0, .Timer_ColorSet
+    NOP
+    .RecolorTimer_White
+    % write color 1 & 2 data
+    ADDI    A1, R0, -1
+    SB      A1, 3 (T3)
+    SW      A1, 4 (T3)
+    SW      A1, 8 (T3)
+    BEQ     R0, R0, .Timer_ColorSet
+    NOP
+    .RecolorTimer_Yellow
+    ADDI    A1, R0, FF
+    SB      A1, 3 (T3)
+    LIO     A1, FA63FFFF
+    SW      A1, 4 (T3)
+    LIO     A1, FA63FF00
+    SW      A1, 8 (T3)
+    .Timer_ColorSet
+    ORI     A1, R0, 0014 % posY
+    ORI     A3, R0, 001F % sizeY
+    JAL     $DrawBox
+    ORI     T1, R0, 5F % opacity
+    .RenderIcon_Order
+    % render order's icon
+    JAL	    ~Func:draw_hud_element_1
+    COPY    A0, S4 % iconIndex
+    BEQ     R0, R0, .Loop_DrawBox
+    NOP
+    .End
+    POP     R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2, S3, S4
+    JR      RA
+    NOP
+}
+
+% used to call this function without modifying any register
+#new:Function $play_sound
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, T0, T1, T2, T3, T4
+    JAL     ~Func:sfx_play_sound
+    NOP     
+    POP     RA, A0, A1, A2, A3, V0, V1, T0, T1, T2, T3, T4
+    JR      RA
+    NOP
+}
+
+% A0=order*
+%
+% 00=white, 01=yellow, 02=red
+#new:Function $GetOrderTimerColor
+{
+    PUSH    RA, A0, A1, A2, A3, V1
+    LIO     A1, $Order1_Data
+    LIO     A2, $BoxData_White1
+    BEQ     A0, A1, .OrderFound
+    RESERVED
+    %
+    LIO     A1, $Order2_Data
+    LIO     A2, $BoxData_White2
+    BEQ     A0, A1, .OrderFound
+    RESERVED
+    %
+    LIO     A1, $Order3_Data
+    LIO     A2, $BoxData_White3
+    BEQ     A0, A1, .OrderFound
+    RESERVED
+    %
+    LIO     A1, $Order4_Data
+    LIO     A2, $BoxData_White4
+    BEQ     A0, A1, .OrderFound
+    RESERVED
+    .OrderFound
+    % get color
+    LBU     A2, 4 (A2) % get box's color1 - green
+    % white
+    ORI     A3, R0, FF
+    BEQ     A2, A3, .End
+    CLEAR   V0
+    % yellow
+    ORI     A3, R0, FA % yellow
+    BEQ     A2, A3, .End
+    ORI     V0, R0, 1
+    ORI     V0, R0, 2 % wasn't white or yellow, return red (02)
+    .End
+    POP     RA, A0, A1, A2, A3, V1
+    JR      RA
+    NOP
+}
+
+#new:Function $CookingMinigame_UpdateScoreAndTimer
+{
+    PUSH    R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2
+    LABU    A0, $PauseByte
+    BNE     A0, R0, .End
+    NOP
+    LIO     S0, $Minigame_Data
+    LIO     A0, $String_Score
+    ORI     A1, R0, 13 % x
+    ORI     A2, R0, C5 % y
+    SW      R0, 10 (SP) % palette
+    SW      R0, 14 (SP) % style
+    JAL     ~Func:draw_string
+    ORI     A3, R0, FF % opacity
+    % draw actual score
+    LW      A0, 4 (S0) % current score
+    ADDI    A1, R0, 45 % X
+    ADDI    A2, R0, C8 % Y
+    SW      R0, 10 (SP) % color
+    ORI     A3, R0, FF
+    SW      A3, 14 (SP) % opacity
+    ORI     A3, R0, 0 % bool
+    JAL     ~Func:draw_number
+    SW      R0, 18 (SP) % text fx
+    %===========================================
+    % Draw timer, code ported from Black Pit
+    %
+    %%
+    % Convert Data to ASCII - Load Minutes
+    %%
+    LIO     A0, $ASCII_Buffer          % Pointer to Save ASCII
+    LIO     A1, $ASCII_Format_Time     % Type of Format to use
+    JAL     ~Func:sprintf
+    LB      A2, 1 (S0)                 % Load Minutes
+    % Convert ASCII to String and Print
+    LIO     A1, $ASCII_Buffer                 % ASCII to Format
+    LIO     A0, $String_Buffer_Size20      % Pointer to Save Final String
+    JAL     $ConvertAsciiToPM64String
+    NOP
+    ORI     S1, R0, D9  % x
+    ORI     S2, R0, C4  % y
+    COPY    A1, S1
+    COPY    A2, S2
+    SW      R0, 0014 (SP) % text fx / 0 = none
+    JAL     ~Func:draw_string
+    ADDIU   A3, R0, FF % opacity
+    % Draw ":"
+    LIO     A0, $String_DosPuntos
+    ADDI    A1, S1, 34  % x
+    COPY    A2, S2
+    SW      R0, 0014 (SP) % text fx / 0 = none
+    JAL     ~Func:draw_string
+    ADDIU   A3, R0, FF % opacity
+    %%
+    % Convert Data to ASCII - Load Seconds
+    %%
+    LIO     A0, $ASCII_Buffer          % Pointer to Save ASCII
+    LIO     A1, $ASCII_Format_Time     % Type of Format to use
+    JAL     ~Func:sprintf
+    LB      A2, 2 (S0)                 % Load Seconds
+    % Convert ASCII to String and Print
+    LIO     A1, $ASCII_Buffer                 % ASCII to Format
+    LIO     A0, $String_Buffer_Size20      % Pointer to Save Final String
+    JAL     $ConvertAsciiToPM64String
+    NOP
+    ADDI    S1, S1, 20 % x
+    COPY    A1, S1
+    COPY    A2, S2 % y
+    SW      R0, 0014 (SP) % text fx / 0 = none
+    JAL     ~Func:draw_string
+    ADDIU   A3, R0, FF % opacity
+    % show clock icon
+    JAL     $IconTable_GetIndex_byItemID
+    ORI     A0, R0, .Item:Clock % 7
+    SW      V0, 14 (SP)
+    ADDI    A1, S1, -16` % x
+    ADDI    A2, S2, 9 % Y
+    JAL	    ~Func:set_hud_element_render_pos
+    COPY    A0, V0 % itemIndex
+    % render icon
+    JAL	    ~Func:draw_hud_element_1
+    LW      A0, 14 (SP) % iconIndex
+    %==========================================
+    % Advance timer, code grabbed from Black Pit
+    %====
+    % Check if timer is empty
+    LB      V0, 1 (S0) % get minutes
+    LB      V1, 2 (S0) % get seconds
+    ADDU    V0, V0, V1
+    BNE     V0, R0, .DecreaseTimer
+    NOP
+    % Timer is zero, stop the game
+    SW      R0, 0 (S0)
+    LIO     A1, *GameState
+    JAL     ~func:set_variable
+    ORI     A2, R0, 5 % cooking game - results
+    SAW     R0, $Data_Results
+    BEQ     R0, R0, .End
+    RESERVED
+    .DecreaseTimer
+    % Check if the timer is paused
+    LABU    T0, $PauseByte
+    BNE     T0, R0, .End
+    NOP
+    LIO     A1, *GameState
+    JAL     ~Func:get_variable
+    RESERVED
+    ORI     T0, R0, 4 % cooking game - step
+    BNE     V0, T0, .End
+    NOP
+    LB      T0, 3 (S0) % get milliseconds
+    % Check if is time to decrease the seconds
+    BLEZL   T0, .MoveSeconds
+    ADDIU   T0, R0, 85` % reset milliseconds
+    ADDI    T0, T0, -3
+    .MoveMilliseconds
+    BEQ     R0, R0, .End
+    SB      T0, 3 (S0) % milliseconds
+    .MoveSeconds
+    SB      T0, 3 (S0) % reset milli
+    LB      T0, 2 (S0) % get seconds
+    %% Check if is time to decrease the minutes
+    BLEZL   T0, .MoveMinutes
+    ADDIU   T0, R0, 59` % reset seconds
+    ADDI    T0, T0, -1
+    % check if they're the last 10 seconds from this match
+    LB      T1, 1 (S0) % minutes
+    BNE     T1, R0, .WriteSecs
+    NOP
+    % zero minutes, check for last 10 secs
+    SLTIU   T1, T0, 11`
+    BEQ     T1, R0, .WriteSecs
+    NOP
+    % last seconds in the game, play a sfx every second
+    JAL     $play_sound
+    ORI     A0, R0, 01A5
+    .WriteSecs
+    BEQ     R0, R0, .End
+    SB      T0, 2 (S0) % seconds
+    .MoveMinutes
+    JAL     $play_sound
+    ORI     A0, R0, 01A5
+    SB      T0, 2 (S0) % seconds
+    LB      T0, 1 (S0) % get minutes
+    %% Check if is time to decrease the hours
+    BLEZL   T0, .MoveHours
+    ADDIU   T0, R0, 59` % reset minutes
+    ADDI    T0, T0, -1
+    BEQ     R0, R0, .End
+    SB      T0, 1 (S0) % minutes
+    .MoveHours
+    SB      T0, 1 (S0) % reset minutes
+    LB      T0, 0 (S0) % get hours
+    ADDI    T0, T0, -1
+    BEQ     R0, R0, .End
+    SB      T0, 0 (S0) % hours
+    .End
+    POP     R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2
+    JR      RA
+    NOP
+}
+
+#string $String_Score
+{
+Score:[End]
+}
+
+#string $String_DosPuntos
+{
+[Size 20]:[End]
+}
+
+#new:ASCII $ASCII_Format_Time
+{
+"%02u"
+}
+
+#string $String_Buffer_Size20
+{
+[Size 20]             [End]
+}
+
+% *out = V0 = next order slot available
+%
+% Get next order slot available in the queue.
+%
+% *out = bool
+#new:Function $OrderQueue_NewOrdersCanBeAdded
+{
+    PUSH    A0, A1, A2, A3, V1
+    % check if queue's position 0x08 is free
+    LIO     A0, $Orders_Queue
+    ADDI    A0, A0, -4
+    ORI     A1, R0, 4
+    ORI     A2, R0, 8 % because last position is the 8th one
+    MULT    A1, A2
+    MFLO    A1
+    ADDU    A0, A0, A1 % get to 8th data
+    LW      A0, 0 (A0)
+    BNEL    A0, R0, .End
+    CLEAR   V0 % position 8 is currently occupied, new orders can't be added
+    ORI     V0, R0, 1
+    .End
+    POP     A0, A1, A2, A3, V1
+    JR      RA
+    NOP
+}
+
+% A0 = OrderX_Data pointer
+%
+% *out = V0 = next position available
+%
+% Get posIndex from the next position from the left
+%
+% gives -1 if this box right now can't move more to the left
+#new:Function $Queue_CheckNextPosition
+{
+    PUSH    A0, A1, A2, A3, V1
+    LIO     A1, $Orders_Queue
+    % search this order data in the queue
+    ADDI    A2, A1, 1C % go to last position in the queue
+    ADDI    A1, A1, -4
+    ORI     V0, R0, 8 % last pos indexPos
+    .Loop
+    LW      A3, 0 (A2)
+    ADDI    A2, A2, -4 % check next pos
+    BEQL    A1, A2, .End % data not found, or was in the last position of the queue anyways
+    ADDI    V0, R0, -1
+    BNEL    A3, A0, .Loop
+    ADDI    V0, V0, -1
+    % data was found
+    %
+    % check if current box is in position #3
+    LBU     V1, 7 (A0) % positionIndex
+    ORI     A1, R0, 3
+    % order isn't in pos #3
+    BNE     V1, A1, .Check_NextQueuePos
+    NOP
+    % order is in pos #3, check if the order has been fullfiled so it means it can move more to the left
+    LBU     V1, 6 (A0) % orderState
+    BEQL    V1, R0, .End
+    ADDI    V0, R0, -1 % next position isn't available
+    % order is in pos #3, but has been fulfilled so it means will leave the queue
+    %
+    % check the order timer to know if the box can leave pos #3 now
+    LHU     V1, 4 (A0) % order timer
+    BNEL    V1, R0, .End % wait a little more frames for the animation to end
+    ADDI    V0, R0, -1 % next position isn't available
+    .Check_NextQueuePos
+    LW      A3, 0 (A2)
+    BEQ     A3, R0, .End % next data is free
+    NOP
+    .Check_PosOffset
+    % The next box data isn't free but check if the box is moving right now
+    % so it means this box can move too
+    LHU     V1, 8 (A3)
+    BEQL    V1, R0, .End
+    ADDI    V0, R0, -1 % next position isn't available
+    .End
+    POP     A0, A1, A2, A3, V1
+    JR      RA
+    NOP
+}
+
+% Call  $GetNextOrderItemID ( itemID* )
+%
+% Returns a -1 if currently there's no more orders available
+#export:Function $GetNextOrderItemID
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S0
+    COPY    S0, A0
+    LIO     A0, $Orders_Queue
+    ORI     V0, R0, 0
+    .Loop
+    LW      A1, 0 (A0)
+    BEQ     A1, R0, .EmptySlot
+    NOP
+    % slot isn't empty, check if this order have state 00
+    LBU     A2, 6 (A1) % state
+    BEQL    A2, R0, .SetVar
+    LHU     V0, 2 (A1) % itemID, next order found
+    .EmptySlot
+    ADDIU   V0, V0, 1
+    SLTIU   V1, V0, 8 % because the queue have 8 slots
+    BEQL    V1, R0, .SetVar % there's no more orders available
+    ADDI    V0, R0, -1
+    BEQ     R0, R0, .Loop
+    ADDIU   A0, A0, 4
+    .SetVar
+    COPY    A0, S0
+    LW      A1, C (A0)
+    LW      A1, 0 (A1) % get arg0
+    JAL     ~Func:set_variable
+    COPY    A2, V0
+    POP     RA, A0, A1, A2, A3, V0, V1, S0
+    JR      RA
+    ORI     V0, R0, 2
+}
+
+% Call  $GetNextFreeOrderPointer ( orderData* )
+%
+% Get the data pointer for the next available order data
+%
+% Returns a -1 if currently there's no more orders available
+#export:Function $GetNextFreeOrderPointer
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S0
+    COPY    S0, A0
+    % Check all orders pointers
+    ORI     A3, R0, FF
+    LIO     A2, $Order1_Data
+    LBU     A1, 6 (A2) % state
+    BEQ     A1, A3, .SetVar
+    NOP
+    %
+    LIO     A2, $Order2_Data
+    LBU     A1, 6 (A2) % state
+    BEQ     A1, A3, .SetVar
+    NOP
+    %
+    LIO     A2, $Order3_Data
+    LBU     A1, 6 (A2) % state
+    BEQ     A1, A3, .SetVar
+    NOP
+    %
+    LIO     A2, $Order4_Data
+    LBU     A1, 6 (A2) % state
+    BEQ     A1, A3, .SetVar
+    NOP
+    ADDI    A2, R0, -1 % there's no orders available
+    .SetVar
+    COPY    A0, S0
+    LW      A1, C (A0)
+    JAL     ~Func:set_variable
+    LW      A1, 0 (A1) % get arg0
+    POP     RA, A0, A1, A2, A3, V0, V1, S0
+    JR      RA
+    ORI     V0, R0, 2
+}
+
+% Call  $GetNextOrderPointer ( orderData* )
+%
+% Get the data pointer for the next order waiting for an item in the queue.
+%
+% Returns a -1 if currently there's no more orders available
+#export:Function $GetNextOrderPointer
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S0
+    COPY    S0, A0
+    LIO     A0, $Orders_Queue
+    ORI     V0, R0, 0
+    .Loop
+    LW      A1, 0 (A0)
+    BEQ     A1, R0, .EmptySlot
+    NOP
+    % slot isn't empty, check if this order have state 00
+    LBU     A2, 6 (A1) % state
+    COPY    A3, A1
+    BEQL    A2, R0, .SetVar
+    COPY    V0, A3 % copy order's pointer
+    .EmptySlot
+    ADDIU   V0, V0, 1
+    SLTIU   V1, V0, 8 % because the queue have 8 slots
+    BEQL    V1, R0, .SetVar % there's no more orders available
+    ADDI    V0, R0, -1
+    BEQ     R0, R0, .Loop
+    ADDIU   A0, A0, 4
+    .SetVar
+    COPY    A0, S0
+    LW      A1, C (A0)
+    LW      A1, 0 (A1) % get arg0
+    JAL     ~Func:set_variable
+    COPY    A2, V0
+    POP     RA, A0, A1, A2, A3, V0, V1, S0
+    JR      RA
+    ORI     V0, R0, 2
+}
+
+% Call  $SetNextOrderState ( stateIndex timer )
+%
+% Set the state for the next order waiting for an item in the queue.
+#export:Function $SetNextOrderState
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S0
+    COPY    S0, A0
+    LIO     A0, $Orders_Queue
+    ORI     V0, R0, 0
+    .Loop
+    LW      A1, 0 (A0)
+    BEQ     A1, R0, .EmptySlot
+    NOP
+    % slot isn't empty, check if this order have state 00
+    LBU     A2, 6 (A1) % state
+    LW      A3, C (S0)
+    LW      A3, 0 (A3) % get arg0
+    BNE     A2, R0, .EmptySlot
+    NOP
+    % next order found
+    SB      A3, 6 (A1) % state
+    LW      A3, C (S0)
+    LW      A3, 4 (A3) % get arg4
+    BEQ     R0, R0, .End
+    SH      A3, 4 (A1) % timer
+    .EmptySlot
+    ADDIU   V0, V0, 1
+    SLTIU   V1, V0, 8 % because the queue have 8 slots
+    BEQ     V1, R0, .End % there's no more order available
+    NOP
+    BEQ     R0, R0, .Loop
+    ADDIU   A0, A0, 4
+    .End
+    POP     RA, A0, A1, A2, A3, V0, V1, S0
+    JR      RA
+    ORI     V0, R0, 2
+}
+
+#new:Data $Orders_Queue
+{
+    00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+%       1       2    |    3       4         5        6   |    7       8
+%          End       |This area is for the actual orders |      Start
+}
+
+#export:Data $Order1_Data
+{
+    0000s % 0x00 % peach's itemID % unused
+    0000s % 0x02 % order's itemID
+    0000s % 0x04 % order's timer
+    FFb   % 0x06 % order state / FF=Order disabled, 0=Awaiting order, 1=Correct, 2=Wrong
+    00b   % 0x07 % position in queue
+    0000s % 0x08 % box's posX
+    0000s % 0x0A % animation timer
+}
+
+#export:Data $Order2_Data
+{
+    0000s % peach's itemID
+    0000s % order's itemID
+    0000s % order's timer
+    FFb   % order state
+    00b   % position in queue
+    0000s % box's posX
+    0000s % animation timer
+}
+
+#export:Data $Order3_Data
+{
+    0000s % peach's itemID
+    0000s % order's itemID
+    0000s % order's timer
+    FFb   % order state
+    00b   % position in queue
+    0000s % box's posX
+    0000s % animation timer
+}
+
+#export:Data $Order4_Data
+{
+    0000s % peach's itemID
+    0000s % order's itemID
+    0000s % order's timer
+    FFb   % order state
+    00b   % position in queue
+    0000s % box's posX
+    0000s % animation timer
+}
+
+%%%%
+
+% Clear all the queue and all orders data
+#export:Function $clear_queue
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1
+    LIO     A0, $Orders_Queue
+    CLEAR   V0
+    .Loop_ClearQueue
+    SW      R0, 0 (A0)
+    ADDIU   V0, V0, 1
+    SLTIU   V1, V0, 8
+    BNE     V1, R0, .Loop_ClearQueue
+    ADDIU   A0, A0, 4 % clear next word
+    % clear orders' data
+    LIO     A0, $Order1_Data
+    ORI     A1, R0, FF00
+    SW      R0, 0 (A0)
+    SW      A1, 4 (A0)
+    SW      R0, 8 (A0)
+    %
+    LIO     A0, $Order2_Data
+    ORI     A1, R0, FF00
+    SW      R0, 0 (A0)
+    SW      A1, 4 (A0)
+    SW      R0, 8 (A0)
+    %
+    LIO     A0, $Order3_Data
+    ORI     A1, R0, FF00
+    SW      R0, 0 (A0)
+    SW      A1, 4 (A0)
+    SW      R0, 8 (A0)
+    %
+    LIO     A0, $Order4_Data
+    ORI     A1, R0, FF00
+    SW      R0, 0 (A0)
+    SW      A1, 4 (A0)
+    SW      R0, 8 (A0)
+    JPOP    RA, A0, A1, A2, A3, V0, V1
+}
+
+% Stick item entity to Peach when she is holding an item
+#new:Function $CookingMinigame_UpdateCurrentItemPos
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S0, F4, F6, F8
+    LIO     S0, $PeachStatus
+    LBU     A1, 0 (S0) % itemTypeIndex
+    BEQL    A1, R0, .End
+    SD      R0, 0 (S0) % clear $PeachStatus
+    % Peach is holding an item
+    %
+    % update itemData to $PeachStatus
+    JAL     $get_item_data
+    LBU     A0, 1 (S0) % itemIndex
+    LH      V1, 0 (V0) % itemType
+    SB      V1, 0 (S0)
+    LH      V1, 4 (V0) % itemID
+    SH      V1, 2 (S0)
+    LH      A1, 8 (V0) % subItem1_ID
+    LH      A2, A (V0) % subItem2_ID
+    LH      A3, C (V0) % subItem3_ID
+    % sub1
+    BLTZL   A1, .UpdateSubIDs_sub1_Empty
+    SH      R0, 4 (S0) % peach's subID1
+    SH      A1, 4 (S0)
+    .UpdateSubIDs_sub1_Empty
+    % sub2
+    BLTZL   A2, .UpdateSubIDs_sub2_Empty
+    SH      R0, 6 (S0) % peach's subID2
+    SH      A2, 6 (S0)
+    .UpdateSubIDs_sub2_Empty
+    % sub3
+    BLTZL   A3, .UpdateSubIDs_sub3_Empty
+    SH      R0, 8 (S0) % peach's subID3
+    SH      A3, 8 (S0)
+    .UpdateSubIDs_sub3_Empty
+    % get item data pointer
+    JAL     ~Func:get_item_entity
+    LBU     A0, 1 (S0) % get itemEntity
+    COPY    V1, V0
+    % get Peach's pos
+    LIO     A0, 8010EFF0 % playerPos
+    LW      A1, 0 (A0) % player posX (float)
+    LW      A2, 4 (A0) % player posY (float)
+    LW      A3, 8 (A0) % player posZ (float)
+    %% X %%%%%%%%%%%
+    MTC1	A1, F4
+    NOP
+    % adjust position according to peach rotation
+    LAF     F6, 8010F070 % player's yaw
+    %
+    % check if player is looking ot the left
+    LIF     F8, 80.0 % if <= 80, means player is looking to the left
+    C.LE.S  F6, F8 % set comparison bit in FCR31.C
+    NOP
+    BC1T    .LookingToTheLeft
+    NOP
+    LIF     F8, 260.0 % if >= 260, means player is looking to the left
+    C.LE.S  F6, F8 % set comparison bit in FCR31.C
+    NOP
+    BC1F    .LookingToTheLeft
+    NOP
+    MTC1    R0, F8 % if == 0, means player is looking to the left
+    C.LT.S  F6, F8 % set comparison bit in FCR31.C
+    BC1F    .LookingToTheRight
+    NOP
+    .LookingToTheLeft
+    % player is looking to the left
+    LIF     F8, -13.0
+    BEQ     R0, R0, .SetPosX
+    RESERVED
+    .LookingToTheRight
+    LIF     F8, 13.0
+    .SetPosX
+    ADD.S   F4, F8, F4
+    SWC1	F4, 8 (V1) % item posX
+    %% Y %%%%%%%%%%%
+    MTC1	A2, F4
+    NOP
+    LIF     F8, 15.0 % y
+    ADD.S   F4, F8, F4
+    SWC1	F4, C (V1) % item posY
+    %% Z %%%%%%%%%%%
+    MTC1	A3, F4
+    NOP
+    LIO     A0, 8010F06C % playerAnimation
+    LBU     A1, 1 (A0) % bankAnimation
+    LHU     A2, 2 (A0) % animationID
+    SLL     A1, A1, 16`
+    ADDU    A0, A1, A2 % 00XXXXXX % get playerAnimation but always start with 2 zeroes
+    % check if Peach is facing backwards by reading the current animationID
+    LIO     A1, 000A0008 % holding an item - idle (backwards)
+    BEQ     A0, A1, .FacingBackwards
+    NOP
+    LIO     A1, 000A002C % holding an item - running (backwards)
+    BEQ     A0, A1, .FacingBackwards
+    NOP
+    LIF     F8, 10.63 % z
+    BEQ     R0, R0, .SetPosZ
+    NOP
+    .FacingBackwards
+    % player is facing backwards
+    LIF     F8, -10.63 % z
+    .SetPosZ
+    ADD.S   F4, F8, F4
+    SWC1	F4, 10 (V1) % item posZ
+    .End
+    POP     RA, A0, A1, A2, A3, V0, V1, S0, F4, F6, F8
+    JR      RA
+    NOP
+}
+
+% Make Peach able to grab, put or mix items on any surface.
+#export:Function $CookingMinigame_GrabAndPutItems
+{
+    PUSH    R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2, F4, F6, F8
+    % Check if inputs are blocked
+    LAW     A0, 8010EFC8 % playerFlags
+    LIO     A1, 00002000 % DisablePlayerInputs
+    AND     A0, A0, A1
+    BNE     A0, R0, .End
+    NOP
+    %
+    LAH     A0, 8015A562 % current collider the player is facing
+    BLTZ    A0, .End % peach isn't facing any collider
+    NOP
+    JAL     $func_get_collider
+    NOP
+    % check collider flags
+    LW      S0, 0 (V0)
+    LIO     A1, 10000000 % item can't be placed here
+    AND     A2, S0, A1
+    BNE     A2, R0, .End
+    NOP
+    % check if the player has pressed the A button
+    LABU    V0, 80074036 % one-time inputs(2)
+    ORI     V1, R0, 0080 % A button
+    AND     V0, V0, V1
+    BEQ     V0, R0, .End % button wasn't pressed
+    NOP
+    % this surface can hold items, check if there's already an item here
+    %
+    JAL     $get_collider_possibleItemPos
+    NOP
+    LWC1    F4, 10 (SP) % x
+    LWC1    F6, 14 (SP) % y
+    LWC1    F8, 18 (SP) % z
+    % Now that we have the actual item pos, we need to
+    % check if any of the current itemEntities have this
+    % same position, so this will mean an item is currently
+    % placed in this collider.
+    LW      A0, 10 (SP) % x
+    LW      A1, 14 (SP) % y
+    JAL     $search_item_at_this_pos
+    LW      A2, 18 (SP) % z
+    BLTZ    V0, .EmptyCollision
+    NOP
+    %=================================
+    % This collision has an item in top of it.
+    %=================================
+    %
+    % this item have the same position as this collider
+    %
+    % get item data
+    JAL     $get_item_data
+    COPY    A0, V0
+    COPY    S1, V0
+    % check if peach is holding any item
+    LIO     A0, $PeachStatus
+    LBU     A1, 0 (A0) % get itemType
+    BNE     A1, R0, .AlreadyHoldingAnItem
+    NOP
+    % Peach isn't holding any item, just grab the item and save the item data in $PeachStatus
+    %
+    % S1=itemExtraData*
+    LHU     A0, 2 (S1) % itemIndex
+    LHU     A1, 4 (S1) % itemID
+    JAL     $set_peach_item
+    LHU     A2, 0 (S1) % itemType
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 5 % equip badge
+    BEQ     R0, R0, .End
+    NOP
+    %======================
+    .AlreadyHoldingAnItem
+    %======================
+    % S1=itemExtraData*
+    % A0=PeachStatus
+    LBU     A1, 0 (A0) % itemType
+    LHU     A2, 0 (S1) % itemType
+    % check itemType 01 - Ingredient
+    %
+    % Peach
+    ORI     A3, R0, 1 % .ItemType:Ingredient
+    BNE     A1, A3, .CheckType_Bowl
+    ORI     V1, R0, 0
+    % Collider
+    BNE     A2, A3, .CheckType_Bowl
+    ORI     V1, R0, 1
+    BEQ     R0, R0, .End % both items are ingredients, skip
+    NOP
+    .CheckType_Bowl
+    % check itemType 02 - Bowl
+    %
+    % Peach
+    ORI     A3, R0, 2 % .ItemType:Bowl
+    BEQ     A1, A3, .itemType02_bowl
+    ORI     V1, R0, 0
+    % Collider
+    BEQ     A2, A3, .itemType02_bowl
+    ORI     V1, R0, 1
+    % 
+    BEQ     R0, R0, .CheckType_BowlMixed
+    NOP
+    %=================
+    .itemType02_bowl
+    %=================
+    %
+    % V1 = 0 = Peach's is carrying this kind of item
+    % V1 = 1 = This kind of item is in this collider
+    %
+    % copy everything to T's registers
+    COPY    T1, S1
+    COPY    T2, A2
+    COPY    T3, A0
+    BNE     V1, R0, .Bowl_Col
+    NOP
+    %%%%
+    .Bowl_Peach % Peach is holding this kind of item
+    %%%%
+    % T1=itemExtraData* (collider)
+    % T2=itemType (collider)
+    % T3=$PeachStatus
+    %
+    % check if this item is an ingredient
+    ORI     T0, R0, 1 % .ItemType:Ingredient
+    BNE     T2, T0 .End
+    NOP
+    % this item is an ingredient, try to add it to the bowl
+    %
+    % get the data from the item peach is holding
+    JAL     $get_item_data
+    LBU     A0, 1 (T3) % itemIndex
+    SH      R0, 6 (V0) % set timer as zero, to show the progress box
+    JAL     $add_subItem
+    LH      A1, 4 (T1) % itemID
+    BEQ     V0, R0, .End % isn't possible to add more items to the bowl
+    NOP
+    % delete col's item new data
+    JAL     $delete_item_data
+    LH      A0, 2 (T1) % itemIndex
+    JAL     ~Func:remove_item_entity_by_index
+    NOP
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 2102 % type inputs letter
+    BEQ     R0, R0, .End
+    NOP
+    %%%
+    .Bowl_Col % this kind of item is in this collision
+    %%%
+    %
+    % T1=itemExtraData* (collider)
+    % T2=itemType (collider)
+    % T3=$PeachStatus
+    %
+    % check if the item peach is carrying is an ingredient
+    ORI     T0, R0, 1 % .ItemType:Ingredient
+    LBU     T2, 0 (T3) % itemType
+    BNE     T2, T0 .End
+    NOP
+    % this item is an ingredient, try to add it to the bowl
+    SH      R0, 6 (T1) % set timer as zero, to show the progress box
+    LH      A0, 2 (T1) % itemIndex
+    JAL     $add_subItem
+    LH      A1, 2 (T3) % itemID
+    BEQ     V0, R0, .End % isn't possible to add more items to the bowl
+    NOP
+    % delete peach's itemEntity and item data
+    JAL     $clear_peach_status % stop carrying any item
+    LBU     A0, 1 (T3) % itemIndex
+    JAL     $delete_item_data
+    NOP
+    JAL     ~Func:remove_item_entity_by_index
+    NOP
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 2102 % type inputs
+    BEQ     R0, R0, .End
+    NOP
+    .CheckType_BowlMixed
+    % check itemType 03 - BowlMixed
+    %
+    % Peach
+    ORI     A3, R0, 3 % .ItemType:Bowl
+    BEQ     A1, A3, .itemType03_mixedBowl
+    ORI     V1, R0, 0
+    % Collider
+    BEQ     A2, A3, .itemType03_mixedBowl
+    ORI     V1, R0, 1
+    % 
+    BEQ     R0, R0, .CheckType_BaseWCake
+    NOP
+    %=================
+    .itemType03_mixedBowl
+    %=================
+    %
+    % V1 = 0 = Peach's is carrying this kind of item
+    % V1 = 1 = This kind of item is in this collider
+    %
+    % copy everything to T's registers
+    COPY    T1, S1
+    COPY    T2, A2
+    COPY    T3, A0
+    BNE     V1, R0, .MixedBowl_Col
+    NOP
+    %%%%
+    .MixedBowl_Peach % Peach is holding this kind of item
+    %%%%
+    % T1=itemExtraData* (collider)
+    % T2=itemType (collider)
+    % T3=$PeachStatus
+    %
+    % check if this item is an empty mold
+    ORI     T0, R0, 4 % .ItemType:Mold
+    BNE     T2, T0 .End
+    NOP
+    % this item is an empty mold, try to add a mix into the mold
+    %
+    % check if this mold already have a mix inside
+    ORI     A0, R0, 0160 % .Item:CakePan
+    LH      A1, 4 (T1) % itemID
+    BNE     A0, A1, .End % isn't an empty pan
+    NOP
+    % get the data from the item peach is holding
+    JAL     $get_item_data
+    LBU     A0, 1 (T3) % itemIndex
+    ADDI    V1, R0, -1
+    SH      V1, 6 (V0) % itemTimer % hide subItems' box
+    COPY    V1, V0
+    % get kind of mold item
+    LH      T4, 8 (V1) % subItem1_ID
+    ORI     T5, R0, 005F % .Item:BakingEgg
+    ORI     T6, R0, 00AA % .Item:CakeMix
+    ORI     T7, R0, 005D % .Item:BakingSugar
+    %
+    BEQL    T4, T5, .MixedBowl_Peach_GetMoldType_CheckIngredient2
+    CLEAR   T5
+    BEQL    T4, T6, .MixedBowl_Peach_GetMoldType_CheckIngredient2
+    CLEAR   T6
+    BEQL    T4, T7, .MixedBowl_Peach_GetMoldType_CheckIngredient2
+    CLEAR   T7
+    .MixedBowl_Peach_GetMoldType_CheckIngredient2
+    LH      T4, A (V1) % subItem2_ID
+    BEQL    T4, T5, .MixedBowl_Peach_GetMoldType_CheckIngredient3
+    CLEAR   T5
+    BEQL    T4, T6, .MixedBowl_Peach_GetMoldType_CheckIngredient3
+    CLEAR   T6
+    BEQL    T4, T7, .MixedBowl_Peach_GetMoldType_CheckIngredient3
+    CLEAR   T7
+    .MixedBowl_Peach_GetMoldType_CheckIngredient3
+    LH      T4, C (V1) % subItem3_ID
+    BEQL    T4, T5, .MixedBowl_Peach_GetMoldType_AllIngredientsChecked
+    CLEAR   T5
+    BEQL    T4, T6, .MixedBowl_Peach_GetMoldType_AllIngredientsChecked
+    CLEAR   T6
+    BEQL    T4, T7, .MixedBowl_Peach_GetMoldType_AllIngredientsChecked
+    CLEAR   T7
+    .MixedBowl_Peach_GetMoldType_AllIngredientsChecked
+    ADD     T5, T5, T6
+    ADD     T5, T5, T7
+    BEQL    T5, R0, .MixedBowl_Peach_GetMoldType_CakeNormal
+    ORI     A1, R0, 0161 % .Item:CakeBatter
+    ORI     A1, R0, 00E1 % .Item:CakeBatterMistake
+    .MixedBowl_Peach_GetMoldType_CakeNormal
+    LH      A0, 2 (T1) % itemIndex
+    JAL     $replace_item
+    ORI     A2, R0, 4 % .ItemType:Mold
+    % swap mixed bowl for an empty bowl
+    JAL     $delete_item_subItemData
+    LH      A0, 2 (V1) % itemIndex_A
+    ORI     A1, R0, 0162 % .Item:CakeBowl
+    ORI     A2, R0, 2 % .ItemType:Bowl
+    JAL     $replace_item
+    LH      A0, 2 (V1) % itemIndex
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 2102 % type inputs
+    BEQ     R0, R0 .End
+    NOP
+    %%%
+    .MixedBowl_Col % this kind of item is in this collision
+    %%%
+    %
+    % T1=itemExtraData* (collider)
+    % T2=itemType (collider)
+    % T3=$PeachStatus
+    %
+    % check if peach is carrying an empty mold
+    ORI     T0, R0, 4 % .ItemType:Mold
+    LBU     A1, 0 (T3) % itemType
+    BNE     T0, A1, .End
+    NOP
+    % this item is an empty mold, try to add the mix into the mold
+    %
+    % check if this mold already have a mix inside
+    JAL     $get_item_data
+    LBU     A0, 1 (T3) % itemIndex
+    COPY    V1, V0
+    LH      A1, 8 (V1) % subItem1
+    BGTZ    A1, .End % already has a mix
+    NOP
+    ADDI    T4, R0, -1
+    SH      T4, 6 (T1) % itemTimer % hide subItems' box
+    % get kind of mold item to get
+    LH      T4, 8 (T1) % subItem1_ID
+    ORI     T5, R0, 005F % .Item:BakingEgg
+    ORI     T6, R0, 00AA % .Item:CakeMix
+    ORI     T7, R0, 005D % .Item:BakingSugar
+    %
+    BEQL    T4, T5, .MixedBowl_Col_GetMoldType_CheckIngredient2
+    CLEAR   T5
+    BEQL    T4, T6, .MixedBowl_Col_GetMoldType_CheckIngredient2
+    CLEAR   T6
+    BEQL    T4, T7, .MixedBowl_Col_GetMoldType_CheckIngredient2
+    CLEAR   T7
+    .MixedBowl_Col_GetMoldType_CheckIngredient2
+    LH      T4, A (T1) % subItem2_ID
+    BEQL    T4, T5, .MixedBowl_Col_GetMoldType_CheckIngredient3
+    CLEAR   T5
+    BEQL    T4, T6, .MixedBowl_Col_GetMoldType_CheckIngredient3
+    CLEAR   T6
+    BEQL    T4, T7, .MixedBowl_Col_GetMoldType_CheckIngredient3
+    CLEAR   T7
+    .MixedBowl_Col_GetMoldType_CheckIngredient3
+    LH      T4, C (T1) % subItem3_ID
+    BEQL    T4, T5, .MixedBowl_Col_GetMoldType_AllIngredientsChecked
+    CLEAR   T5
+    BEQL    T4, T6, .MixedBowl_Col_GetMoldType_AllIngredientsChecked
+    CLEAR   T6
+    BEQL    T4, T7, .MixedBowl_Col_GetMoldType_AllIngredientsChecked
+    CLEAR   T7
+    .MixedBowl_Col_GetMoldType_AllIngredientsChecked
+    ADD     T5, T5, T6
+    ADD     T5, T5, T7
+    BEQL    T5, R0, .MixedBowl_Col_GetMoldType_CakeNormal
+    ORI     A1, R0, 0161 % .Item:CakeBatter
+    ORI     A1, R0, 00E1 % .Item:CakeBatterMistake
+    .MixedBowl_Col_GetMoldType_CakeNormal
+    LH      A0, 2 (V1) % itemIndex
+    JAL     $replace_item
+    ORI     A2, R0, 4 % .ItemType:Mold
+    % swap mixed bowl for an empty bowl
+    JAL     $delete_item_subItemData
+    LH      A0, 2 (T1) % itemIndex_A
+    ORI     A1, R0, 0162 % .Item:CakeBowl
+    ORI     A2, R0, 2 % .ItemType:Bowl
+    JAL     $replace_item
+    LH      A0, 2 (T1) % itemIndex
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 2102 % type inputs
+    BEQ     R0, R0 .End
+    NOP
+    .CheckType_BaseWCake
+    % check itemType 07 - BaseWCake
+    %
+    % Peach
+    ORI     A3, R0, 7 % .ItemType:BaseWCake
+    BEQ     A1, A3, .itemType07_baseWCake
+    ORI     V1, R0, 0
+    % Collider
+    BEQ     A2, A3, .itemType07_baseWCake
+    ORI     V1, R0, 1
+    % 
+    BEQ     R0, R0, .End
+    NOP    
+    %=================
+    .itemType07_baseWCake
+    %=================
+    %
+    % V1 = 0 = Peach's is carrying this kind of item
+    % V1 = 1 = This kind of item is in this collider
+    %
+    % copy everything to T's registers
+    COPY    T1, S1
+    COPY    T2, A2
+    COPY    T3, A0
+    BNE     V1, R0, .BaseWCake_Col
+    NOP
+    %%%%
+    .BaseWCake_Peach % Peach is holding this kind of item
+    %%%%
+    % T1=itemExtraData* (collider)
+    % T2=itemType (collider)
+    % T3=$PeachStatus
+    %
+    % check if this item is a decoration
+    ORI     T0, R0, 8 % .ItemType:Decoration
+    BEQ     T2, T0 .BaseWCake_Peach_AddDecoration
+    NOP
+    % check if this item is cuttable type
+    ORI     T0, R0, 9 % .ItemType:Cuttable
+    BNE     T2, T0 .End
+    NOP
+    % Check if the cake already has 3 subItems
+    JAL     $get_item_data % get peach's item data
+    LBU     A0, 1 (T3) % itemIndex
+    LH      A1, C (V0) % subItem3
+    BGTZ    A1, .End % all subItems slots are occupied
+    NOP
+    % Tell to the player the fruit needs to be cutted first.
+    CLEAR   A2
+    LIA	    A0, $Script_CutFruitFirst
+    JAL	    ~Func:start_script
+    ADDIU	A1, R0, 1
+    BEQ     R0, R0, .End
+    NOP
+    .BaseWCake_Peach_AddDecoration
+    % this item is a decoration, try to add it into the cake
+    %
+    % check if there's subItems slots left
+    JAL     $get_item_data % get peach's item data
+    LBU     A0, 1 (T3) % itemIndex
+    LH      A1, C (V0) % subItem3
+    BGTZ    A1, .End % all subItems slots are occupied
+    NOP
+    COPY    V1, V0    
+    LH      A1, 4 (T1) % itemID
+    % convert the bowl items to the original versions
+    %
+    % Strawberries
+    ORI     A0, R0, 002D % .Item:BowlStrawberries
+    BEQL    A0, A1, .BaseWCake_Peach_AddSubItem
+    ORI     A1, R0, 0061 % .Item:BakingStrawberry
+    % Blueberries
+    ORI     A0, R0, 002B % .Item:BowlBlueBerries
+    BEQL    A0, A1, .BaseWCake_Peach_AddSubItem
+    ORI     A1, R0, 009E % .Item:BlueBerry
+    % Bubbleberries
+    ORI     A0, R0, 002C % .Item:BowlBubbleBerries
+    BEQL    A0, A1, .BaseWCake_Peach_AddSubItem
+    ORI     A1, R0, 00A1 % .Item:BubbleBerry
+    .BaseWCake_Peach_AddSubItem
+    JAL     $add_subItem
+    LH      A0, 2 (V1) % itemIndex
+    SH      R0, 6 (V1) % show timer
+    % get new cake
+    JAL     $get_cake
+    LH      A0, 2 (V1) % itemIndex
+    % check if new cake is a mistake
+    ORI     A0, R0, 00C2 % Item:Mistake
+    ORI     A2, R0, 10` % .ItemType:Mistake
+    ADDI    A3, R0, -1
+    BEQL    V0, A0, .BaseWCake_Peach_ItemTypeSet
+    SH      A3, 6 (V1) % clear timer
+    % wasn't a mistake
+    ORI     A2, R0, 7 % .ItemType:BaseWCake
+    % replace item with the new cake
+    .BaseWCake_Peach_ItemTypeSet
+    LH      A0, 2 (V1) % itemIndex
+    JAL     $replace_item
+    COPY    A1, V0 % itemID
+    % delete col's item and data
+    JAL     $delete_item_data
+    LH      A0, 2 (S1) % itemIndex
+    JAL     ~Func:remove_item_entity_by_index
+    NOP
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 2102 % type inputs
+    BEQ     R0, R0 .End
+    NOP
+    %%%
+    .BaseWCake_Col % this kind of item is in this collision
+    %%%
+    % T1=itemExtraData* (collider)
+    % T2=itemType (collider)
+    % T3=$PeachStatus
+    %
+    % check if this item is a decoration
+    LBU     T2, 0 (T3) % peach's itemType
+    ORI     T0, R0, 8 % .ItemType:Decoration
+    BEQ     T2, T0 .BaseWCake_Col_AddDecoration
+    NOP
+    % check if this item is cuttable type
+    ORI     T0, R0, 9 % .ItemType:Cuttable
+    BNE     T2, T0 .End
+    NOP
+    % Check if the cake already has 3 subItems
+    LH      A1, C (T1) % subItem3
+    BGTZ    A1, .End % all subItems slots are occupied
+    NOP
+    % Tell to the player the fruit needs to be cutted first.
+    CLEAR   A2
+    LIA	    A0, $Script_CutFruitFirst
+    JAL	    ~Func:start_script
+    ADDIU	A1, R0, 1
+    BEQ     R0, R0, .End
+    NOP
+    .BaseWCake_Col_AddDecoration
+    % this item is a decoration, try to add it into the cake
+    %
+    % check if there's subItems slots left
+    JAL     $get_item_data % get peach's item data
+    LBU     A0, 1 (T3) % itemIndex
+    LH      A1, C (T1) % subItem3
+    BGTZ    A1, .End % all subItems slots are occupied
+    NOP
+    COPY    V1, V0    
+    LH      A1, 4 (V1) % itemID
+    % convert the bowl items to the original versions
+    %
+    % Strawberries
+    ORI     A0, R0, 002D % .Item:BowlStrawberries
+    BEQL    A0, A1, .BaseWCake_Col_AddSubItem
+    ORI     A1, R0, 0061 % .Item:BakingStrawberry
+    % Blueberries
+    ORI     A0, R0, 002B % .Item:BowlBlueBerries
+    BEQL    A0, A1, .BaseWCake_Col_AddSubItem
+    ORI     A1, R0, 009E % .Item:BlueBerry
+    % Bubbleberries
+    ORI     A0, R0, 002C % .Item:BowlBubbleBerries
+    BEQL    A0, A1, .BaseWCake_Col_AddSubItem
+    ORI     A1, R0, 00A1 % .Item:BubbleBerry
+    .BaseWCake_Col_AddSubItem
+    JAL     $add_subItem
+    LH      A0, 2 (T1) % itemIndex
+    SH      R0, 6 (T1) % show timer
+    % get new cake
+    JAL     $get_cake
+    LH      A0, 2 (T1) % itemIndex
+    % check if new cake is a mistake
+    ORI     A0, R0, 00C2 % Item:Mistake
+    ORI     A2, R0, 10` % .ItemType:Mistake
+    ADDI    A3, R0, -1
+    BEQL    V0, A0, .BaseWCake_Col_ItemTypeSet
+    SH      A3, 6 (T1) % clear timer
+    % wasn't a mistake
+    ORI     A2, R0, 7 % .ItemType:BaseWCake
+    % replace item with the new cake
+    .BaseWCake_Col_ItemTypeSet
+    LH      A0, 2 (T1) % itemIndex
+    JAL     $replace_item
+    COPY    A1, V0 % itemID
+    % delete peach's item and data
+    JAL     $clear_peach_status % stop carrying any item
+    LH      A0, 2 (V1) % itemIndex
+    JAL     $delete_item_data
+    NOP
+    JAL     ~Func:remove_item_entity_by_index
+    NOP
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 2102 % type inputs
+    BEQ     R0, R0 .End
+    NOP
+    %==========================================
+    .EmptyCollision
+    %
+    % There's no item placed in this collision
+    %==========================================
+    %
+    % Check if Peach is holding an item
+    LIO     A0, $PeachStatus
+    LBU     A1, 0 (A0) % get itemType
+    BEQ     A1, R0, .End % Peach isn't holding anything
+    NOP
+    % check if the item peach is carrying is type MoldCooked
+    ORI     A2, R0, 5 % .ItemType:MoldCooked
+    BNE     A1, A2, .EmptyCollision_putItem
+    NOP
+    COPY    T0, A0
+    % check if a new item can be spawned
+    JAL     $get_item_slots_free
+    NOP
+    BGTZ    V0, .MoldCooked_SpawnCake
+    NOP
+    % New items can't be added
+    CLEAR   A2
+    LIA	    A0, $Script_CheckItemCap
+    JAL	    ~Func:start_script
+    ADDIU	A1, R0, 1
+    BEQ     R0, R0, .End
+    NOP
+    .MoldCooked_SpawnCake
+    % get kind of cake to spawn
+    LHU     A1, 2 (T0) % itemID
+    ORI     A2, R0, 0161 % .Item:CakeBatter
+    BEQ     A1, A2, .MoldCooked_SpawnCake_CreateEntity
+    ORI     S0, R0, 015F % .Item:CakeBare
+    ORI     A2, R0, 00E0 % .Item:CakeBatterBurned
+    BEQ     A1, A2, .MoldCooked_SpawnCake_CreateEntity
+    ORI     S0, R0, 000A % .Item:Burned
+    ORI     S0, R0, 0102 % .Item:Mistake_Cake
+    .MoldCooked_SpawnCake_CreateEntity
+    MFC1    A1, F4 % x
+    MFC1    A2, F6 % y
+    MFC1    A3, F8 % z
+    ORI     V0, R0, 1 % .ItemSpawnMode:Decoration
+    SW      V0, 10 (SP) % itemSpawnMode
+    SW      R0, 14 (SP) % pickupVar
+    JAL     ~func:make_item_entity_nodelay
+    COPY    A0, S0
+    % add item data
+    COPY    A2, S0
+    COPY    A1, V0 % itemIndex
+    JAL     $add_item_data
+    ORI     A0, R0, 7 % .ItemType:BaseWCake
+    % replace pan item
+    LIO     T0, $PeachStatus
+    JAL     $get_item_data
+    LBU     A0, 1 (T0) % get itemIndex
+    % clear timer
+    ADDI    A1, R0, -1
+    SH      A1, 6 (V0)
+    LH      A0, 2 (V0) % itemIndex
+    ORI     A1, R0, 0160 % .Item:CakePan
+    JAL     $replace_item
+    ORI     A2, R0, 4 % .ItemType:Mold
+    % play sfx
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 6 % unequip badge    
+    BEQ     R0, R0, .End
+    NOP
+    %=======================
+    .EmptyCollision_putItem
+    %=======================
+    % Peach is holding an item, place item on top of the collider
+    %
+    % F4=collider's x pos
+    % F6=collider's y pos
+    % F8=collider's z pos
+    %
+    % get item being holded's data
+    JAL     ~Func:get_item_entity
+    LBU     A0, 1 (A0) % itemIndex
+    % clear $PeachStatus data
+    JAL     $clear_peach_status
+    NOP
+    SWC1	F4, 8 (V0) % item posX
+    SWC1	F6, C (V0) % item posY
+    SWC1	F8, 10 (V0) % item posZ
+    JAL     ~Func:sfx_play_sound
+    ORI     A0, R0, 6 % unequip badge
+    .End
+    POP     R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2, F4, F6, F8
+    JR      RA
+    NOP
+}
+
+% get the position an item should have if was placed in a collider in specific
+%
+% A0=colliderID
+%
+% returns coordinates as floats in sp10/14/18
+#export:Function $get_collider_possibleItemPos
+{
+    PUSH    R0, R0, R0, RA, A0, A1, A2, A3, V1, S0, S1, S2, F4, F6, F8, F10
+    JAL     $func_get_collider
+    NOP
+    LW      S0, 0 (V0) % get collider flags
+    % get collider center
+    LW      A0, 20 (SP) % colliderID
+    ADDIU   A1, SP, 10 % save posX here
+    ADDIU   A2, SP, 14 % posY
+    JAL     ~Func:get_collider_center % save coordinates as floats in sp(10,14,18)
+    ADDIU   A3, SP, 18 % posZ
+    LWC1    F10, 10 (SP) % x
+    % convert to int and then back to float, to remove any fractions
+    CVT.W.S F4, F10
+    NOP
+    CVT.S.W F10, F4
+    NOP
+    MOV.S   F4, F10
+    NOP
+    LWC1    F10, 14 (SP) % y
+    CVT.W.S F6, F10
+    NOP
+    CVT.S.W F10, F6
+    NOP
+    MOV.S   F6, F10
+    NOP
+    LWC1    F10, 18 (SP) % z
+    %
+    CVT.W.S F8, F10
+    NOP
+    CVT.S.W F10, F8
+    NOP
+    MOV.S   F8, F10
+    NOP
+    % get where the item should be exactly placed according to the collider yaw by reading the collider flags
+    %
+    % S0 = colliderFlags
+    LIO     A0, 01000000 % right collider
+    AND     A1, S0, A0
+    BEQ     A1, R0, .Check_ColliderFlags_Back
+    NOP
+    % this collider is facing to this direction
+    LIF     F10, -15.0
+    ADD.S   F4, F4, F10 % x
+    LIF     F10, 12.0
+    ADD.S   F6, F6, F10 % y
+    BEQ     R0, R0, .End
+    NOP
+    .Check_ColliderFlags_Back
+    LIO     A0, 02000000 % back collider
+    AND     A1, S0, A0
+    BEQ     A1, R0, .Check_ColliderFlags_Left
+    NOP
+    LIF     F10, 12.0
+    ADD.S   F6, F6, F10 % y
+    LIF     F10, -15.0
+    ADD.S   F8, F8, F10 % z
+    BEQ     R0, R0, .End
+    NOP
+    .Check_ColliderFlags_Left
+    LIO     A0, 04000000 % left collider
+    AND     A1, S0, A0
+    BEQ     A1, R0, .Check_ColliderFlags_Front
+    NOP
+    LIF     F10, 15.0
+    ADD.S   F4, F4, F10 % x
+    LIF     F10, 12.0
+    ADD.S   F6, F6, F10 % y
+    BEQ     R0, R0, .End
+    NOP
+    .Check_ColliderFlags_Front
+    LIO     A0, 08000000 % front collider
+    AND     A1, S0, A0
+    BEQ     A1, R0, .End
+    NOP
+    LIF     F10, 12.0
+    ADD.S   F6, F6, F10 % y
+    LIF     F10, 15.0
+    ADD.S   F8, F8, F10 % z
+    .End
+    ADDI    A0, SP, 50 % stack size +4
+    SWC1    F4, 10 (A0) % x
+    SWC1    F6, 14 (A0) % y
+    SWC1    F8, 18 (A0) % z
+    POP     R0, R0, R0, RA, A0, A1, A2, A3, V1, S0, S1, S2, F4, F6, F8, F10
+    JR      RA
+    NOP
+}
+
+
+% A0= posX (float)
+%
+% A1= posY (float)
+%
+% A2= posZ (float)
+%
+% V0 = itemIndex, returns -1 if nothing was found
+#export:Function $search_item_at_this_pos
+{
+    PUSH    R0, R0, R0, RA, A0, A1, A2, A3, V1, S0, S1, S2, F4, F6, F8, F10, F16, F18
+    LIO     S1, $ItemsData
+    ADDI    S1, S1, -14`
+    CLEAR   S2
+    % move to cp1
+    MTC1    A0, F4
+    NOP
+    MTC1    A1, F6
+    NOP
+    MTC1    A2, F8
+    NOP
+    .Loop_LoadNextItem
+    ADDIU   S1, S1, 14` % because every item uses 14 bytes of data
+    ORI     A3, R0, 21` % because $ItemsData holds the data of 20 items.
+    LH      A0, 2 (S1) % load itemIndex
+    ADDIU   S2, S2, 1
+    BEQL    S2, A3, .End % all items have been checked
+    ADDI    V0, R0, -1
+    BLTZ    A0, .Loop_LoadNextItem
+    NOP
+    % this item data isn't empty
+    JAL     ~Func:get_item_entity
+    NOP
+    LWC1	F10, 8 (V0) % item posX
+    LWC1	F16, C (V0) % item posY
+    LWC1	F18, 10 (V0) % item posZ
+    % check if this item is in this collider pos
+    %
+    % F4=collider's x pos
+    % F6=collider's y pos
+    % F8=collider's z pos
+    %
+    % F10=item's x pos
+    % F16=item's y pos
+    % F18=item's z pos
+    C.EQ.S  F4, F10 % compare Xs
+    BC1F    .Loop_LoadNextItem % this item doesn't have the save position
+    C.EQ.S  F6, F16 % compare Ys
+    BC1F    .Loop_LoadNextItem
+    C.EQ.S  F8, F18 % compare Zs
+    BC1F    .Loop_LoadNextItem
+    NOP
+    LH      V0, 2 (S1) % load itemIndex
+    .End
+    POP     R0, R0, R0, RA, A0, A1, A2, A3, V1, S0, S1, S2, F4, F6, F8, F10, F16, F18
+    JR      RA
+    NOP
+}
+
+#export:Script:Map $Script_CutFruitFirst {
+    Call 	$WriteAddress ( $PauseByte 0 .True .False .False ) % pause timers
+    Call	DisablePlayerInput ( .True )
+    SetGroup 0
+    SuspendAll 2
+    Call	ShowMessageAtScreenPos ( $String_CutFruitFirst A0 28 )
+    Call 	$WriteAddress ( $PauseByte 0 .False .False .False ) % unpause timers
+    ResumeAll 2
+    Call	DisablePlayerInput ( .False )
+    Return
+    End
+}
+
+#string $String_CutFruitFirst
+{
+[Style Inspect][DelayOff]
+First, [SaveColor][Color:07]cut[RestoreColor] this fruit.
+[Wait][End]
+}
+
+%===================
+% Cake combinations
+%===================
+
+% This tables have all the items possible to get in the game.
+
+% Good cake combinations
+#export:Data $CombinationsTable_Cake
+{
+    %       recipe        %           ingredient1         ingredient2            ingredient3
+    .Item:CakeBlue1                .Item:BlueBerry        .False                 .False
+    .Item:CakeBlue2                .Item:BlueBerry        .Item:BlueBerry        .False
+    .Item:CakeBlue2Bubble1         .Item:BlueBerry        .Item:BlueBerry        .Item:BubbleBerry
+    .Item:CakeBlue2Straw1          .Item:BlueBerry        .Item:BlueBerry        .Item:BakingStrawberry
+    .Item:CakeBlue3                .Item:BlueBerry        .Item:BlueBerry        .Item:BlueBerry
+    %
+    .Item:CakeBubble1              .Item:BubbleBerry      .False                 .False
+    .Item:CakeBubble2              .Item:BubbleBerry      .Item:BubbleBerry      .False
+    .Item:CakeBubble2Blue1         .Item:BubbleBerry      .Item:BubbleBerry      .Item:BlueBerry
+    .Item:CakeBubble2Straw1        .Item:BubbleBerry      .Item:BubbleBerry      .Item:BakingStrawberry
+    .Item:CakeBubble3              .Item:BubbleBerry      .Item:BubbleBerry      .Item:BubbleBerry
+    %
+    .Item:CakeCream1               .Item:BakingCream      .False                 .False
+    .Item:CakeCream1Blue1          .Item:BakingCream      .Item:BlueBerry        .False
+    .Item:CakeCream1Blue2          .Item:BakingCream      .Item:BlueBerry        .Item:BlueBerry
+    .Item:CakeCream1Bubble1        .Item:BakingCream      .Item:BubbleBerry      .False
+    .Item:CakeCream1Bubble2        .Item:BakingCream      .Item:BubbleBerry      .Item:BubbleBerry
+    .Item:CakeCream1Straw1         .Item:BakingCream      .Item:BakingStrawberry .False
+    .Item:CakeCream1Straw1Blue1    .Item:BakingCream      .Item:BakingStrawberry .Item:BlueBerry
+    .Item:CakeCream1Straw1Bubble1  .Item:BakingCream      .Item:BakingStrawberry .Item:BubbleBerry
+    .Item:CakeCream1Straw2         .Item:BakingCream      .Item:BakingStrawberry .Item:BakingStrawberry
+    .Item:CakeCream2               .Item:BakingCream      .Item:BakingCream      .False
+    .Item:CakeCream2Blue1          .Item:BakingCream      .Item:BakingCream      .Item:BlueBerry
+    .Item:CakeCream2Bubble1        .Item:BakingCream      .Item:BakingCream      .Item:BubbleBerry
+    .Item:CakeCream2Straw1         .Item:BakingCream      .Item:BakingCream      .Item:BakingStrawberry
+    .Item:CakeCream3               .Item:BakingCream      .Item:BakingCream      .Item:BakingCream
+    %
+    .Item:CakeStraw1               .Item:BakingStrawberry .False                 .False
+    .Item:CakeStraw1Blue1          .Item:BakingStrawberry .Item:BlueBerry        .False
+    .Item:CakeStraw1Blue1Bubble1   .Item:BakingStrawberry .Item:BlueBerry        .Item:BubbleBerry
+    .Item:CakeStraw1Bubble1        .Item:BakingStrawberry .Item:BubbleBerry      .False
+    .Item:CakeStraw2               .Item:BakingStrawberry .Item:BakingStrawberry .False
+    .Item:CakeStraw2Blue1          .Item:BakingStrawberry .Item:BakingStrawberry .Item:BlueBerry
+    .Item:CakeStraw2Bubble1        .Item:BakingStrawberry .Item:BakingStrawberry .Item:BubbleBerry
+    .Item:CakeStraw3               .Item:BakingStrawberry .Item:BakingStrawberry .Item:BakingStrawberry    
+    FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF % end
+}
+
+% Mistake cake combinations
+#export:Data $CombinationsTable_Mistake
+{
+    %       recipe        %           ingredient1         ingredient2            ingredient3
+    .Item:MistakeBlue1                .Item:BlueBerry        .False                 .False
+    .Item:MistakeBlue2                .Item:BlueBerry        .Item:BlueBerry        .False
+    .Item:MistakeBlue2Bubble1         .Item:BlueBerry        .Item:BlueBerry        .Item:BubbleBerry
+    .Item:MistakeBlue2Straw1          .Item:BlueBerry        .Item:BlueBerry        .Item:BakingStrawberry
+    .Item:MistakeBlue3                .Item:BlueBerry        .Item:BlueBerry        .Item:BlueBerry
+    %
+    .Item:MistakeBubble1              .Item:BubbleBerry      .False                 .False
+    .Item:MistakeBubble2              .Item:BubbleBerry      .Item:BubbleBerry      .False
+    .Item:MistakeBubble2Blue1         .Item:BubbleBerry      .Item:BubbleBerry      .Item:BlueBerry
+    .Item:MistakeBubble2Straw1        .Item:BubbleBerry      .Item:BubbleBerry      .Item:BakingStrawberry
+    .Item:MistakeBubble3              .Item:BubbleBerry      .Item:BubbleBerry      .Item:BubbleBerry
+    %
+    .Item:MistakeCream1               .Item:BakingCream      .False                 .False
+    .Item:MistakeCream1Blue1          .Item:BakingCream      .Item:BlueBerry        .False
+    .Item:MistakeCream1Blue2          .Item:BakingCream      .Item:BlueBerry        .Item:BlueBerry
+    .Item:MistakeCream1Bubble1        .Item:BakingCream      .Item:BubbleBerry      .False
+    .Item:MistakeCream1Bubble2        .Item:BakingCream      .Item:BubbleBerry      .Item:BubbleBerry
+    .Item:MistakeCream1Straw1         .Item:BakingCream      .Item:BakingStrawberry .False
+    .Item:MistakeCream1Straw1Blue1    .Item:BakingCream      .Item:BakingStrawberry .Item:BlueBerry
+    .Item:MistakeCream1Straw1Bubble1  .Item:BakingCream      .Item:BakingStrawberry .Item:BubbleBerry
+    .Item:MistakeCream1Straw2         .Item:BakingCream      .Item:BakingStrawberry .Item:BakingStrawberry
+    .Item:MistakeCream2               .Item:BakingCream      .Item:BakingCream      .False
+    .Item:MistakeCream2Blue1          .Item:BakingCream      .Item:BakingCream      .Item:BlueBerry
+    .Item:MistakeCream2Bubble1        .Item:BakingCream      .Item:BakingCream      .Item:BubbleBerry
+    .Item:MistakeCream2Straw1         .Item:BakingCream      .Item:BakingCream      .Item:BakingStrawberry
+    .Item:MistakeCream3               .Item:BakingCream      .Item:BakingCream      .Item:BakingCream
+    %
+    .Item:MistakeStraw1               .Item:BakingStrawberry .False                 .False
+    .Item:MistakeStraw1Blue1          .Item:BakingStrawberry .Item:BlueBerry        .False
+    .Item:MistakeStraw1Blue1Bubble1   .Item:BakingStrawberry .Item:BlueBerry        .Item:BubbleBerry
+    .Item:MistakeStraw1Bubble1        .Item:BakingStrawberry .Item:BubbleBerry      .False
+    .Item:MistakeStraw2               .Item:BakingStrawberry .Item:BakingStrawberry .False
+    .Item:MistakeStraw2Blue1          .Item:BakingStrawberry .Item:BakingStrawberry .Item:BlueBerry
+    .Item:MistakeStraw2Bubble1        .Item:BakingStrawberry .Item:BakingStrawberry .Item:BubbleBerry
+    .Item:MistakeStraw3               .Item:BakingStrawberry .Item:BakingStrawberry .Item:BakingStrawberry    
+    FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF % end
+}
+
+% Burned cake combinations
+#export:Data $CombinationsTable_Burned
+{
+    %       recipe        %           ingredient1         ingredient2            ingredient3
+    .Item:BurnedBlue1                .Item:BlueBerry        .False                 .False
+    .Item:BurnedBlue2                .Item:BlueBerry        .Item:BlueBerry        .False
+    .Item:BurnedBlue2Bubble1         .Item:BlueBerry        .Item:BlueBerry        .Item:BubbleBerry
+    .Item:BurnedBlue2Straw1          .Item:BlueBerry        .Item:BlueBerry        .Item:BakingStrawberry
+    .Item:BurnedBlue3                .Item:BlueBerry        .Item:BlueBerry        .Item:BlueBerry
+    %
+    .Item:BurnedBubble1              .Item:BubbleBerry      .False                 .False
+    .Item:BurnedBubble2              .Item:BubbleBerry      .Item:BubbleBerry      .False
+    .Item:BurnedBubble2Blue1         .Item:BubbleBerry      .Item:BubbleBerry      .Item:BlueBerry
+    .Item:BurnedBubble2Straw1        .Item:BubbleBerry      .Item:BubbleBerry      .Item:BakingStrawberry
+    .Item:BurnedBubble3              .Item:BubbleBerry      .Item:BubbleBerry      .Item:BubbleBerry
+    %
+    .Item:BurnedCream1               .Item:BakingCream      .False                 .False
+    .Item:BurnedCream1Blue1          .Item:BakingCream      .Item:BlueBerry        .False
+    .Item:BurnedCream1Blue2          .Item:BakingCream      .Item:BlueBerry        .Item:BlueBerry
+    .Item:BurnedCream1Bubble1        .Item:BakingCream      .Item:BubbleBerry      .False
+    .Item:BurnedCream1Bubble2        .Item:BakingCream      .Item:BubbleBerry      .Item:BubbleBerry
+    .Item:BurnedCream1Straw1         .Item:BakingCream      .Item:BakingStrawberry .False
+    .Item:BurnedCream1Straw1Blue1    .Item:BakingCream      .Item:BakingStrawberry .Item:BlueBerry
+    .Item:BurnedCream1Straw1Bubble1  .Item:BakingCream      .Item:BakingStrawberry .Item:BubbleBerry
+    .Item:BurnedCream1Straw2         .Item:BakingCream      .Item:BakingStrawberry .Item:BakingStrawberry
+    .Item:BurnedCream2               .Item:BakingCream      .Item:BakingCream      .False
+    .Item:BurnedCream2Blue1          .Item:BakingCream      .Item:BakingCream      .Item:BlueBerry
+    .Item:BurnedCream2Bubble1        .Item:BakingCream      .Item:BakingCream      .Item:BubbleBerry
+    .Item:BurnedCream2Straw1         .Item:BakingCream      .Item:BakingCream      .Item:BakingStrawberry
+    .Item:BurnedCream3               .Item:BakingCream      .Item:BakingCream      .Item:BakingCream
+    %
+    .Item:BurnedStraw1               .Item:BakingStrawberry .False                 .False
+    .Item:BurnedStraw1Blue1          .Item:BakingStrawberry .Item:BlueBerry        .False
+    .Item:BurnedStraw1Blue1Bubble1   .Item:BakingStrawberry .Item:BlueBerry        .Item:BubbleBerry
+    .Item:BurnedStraw1Bubble1        .Item:BakingStrawberry .Item:BubbleBerry      .False
+    .Item:BurnedStraw2               .Item:BakingStrawberry .Item:BakingStrawberry .False
+    .Item:BurnedStraw2Blue1          .Item:BakingStrawberry .Item:BakingStrawberry .Item:BlueBerry
+    .Item:BurnedStraw2Bubble1        .Item:BakingStrawberry .Item:BakingStrawberry .Item:BubbleBerry
+    .Item:BurnedStraw3               .Item:BakingStrawberry .Item:BakingStrawberry .Item:BakingStrawberry    
+    FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF % end
+}
+
+% A0=itemIndex
+%
+% Read an item's subItems to know which kind of new cake combination the player will get.
+%
+% Returns the new cake itemID, if nothing was found returns 00C2/Mistake as ID
+#export:Function $get_cake
+{
+    PUSH    RA, A0, A1, A2, A3, T0, T1, T2, T3, T4, T5, V1
+    % get kind of cake
+    JAL     $get_item_data
+    NOP
+    LH      A1, 4 (V0) % itemID
+    % check kind of cake
+    %
+    % Check .Item:CakeBare, it uses a completely diferent ID
+    ORI     A3, R0, 015F % .Item:CakeBare
+    LIO     V1, $CombinationsTable_Cake
+    BEQ     A3, A1, .Loop_CheckNextSlot
+    RESERVED
+    SLTIU   A3, A1, 0102 % .Item:Mistake_Cake
+    LIO     V1, $CombinationsTable_Mistake
+    BEQ     A3, R0, .Loop_CheckNextSlot
+    RESERVED
+    SLTIU   A3, A1, 00E2 % .Item:CakeBlue1 % first good cake itemID
+    LIO     V1, $CombinationsTable_Cake
+    BEQ     A3, R0, .Loop_CheckNextSlot
+    RESERVED
+    % wasn't any of the other cakes, use the burned one
+    LIO     V1, $CombinationsTable_Burned
+    .Loop_CheckNextSlot
+    % is this the last slot?
+    LW      T0, 0 (V1) % slot's itemID
+    BLTZL   T0, .End
+    ORI     V0, R0, 00C2 % .Item:Mistake, nothing was found returns a mistake
+    % load your subItems
+    LH      T0, 8 (V0) % subItem1
+    LH      T1, A (V0) % subItem2
+    LH      T2, C (V0) % subItem3
+    % load this slot subItems
+    LW      T3, 4 (V1) % subItem1
+    LW      T4, 8 (V1) % subItem2
+    LW      T5, C (V1) % subItem3
+    .CheckSubItem1_1
+    BNE     T0, T3, .CheckSubItem1_2
+    NOP
+    CLEAR   T0
+    BEQ     R0, R0, .CheckSubItem2_1
+    CLEAR   T3
+    .CheckSubItem1_2
+    BNE     T0, T4, .CheckSubItem1_3
+    NOP
+    CLEAR   T0
+    BEQ     R0, R0, .CheckSubItem2_1
+    CLEAR   T4
+    .CheckSubItem1_3
+    BNE     T0, T5, .CheckSubItem2_1
+    NOP
+    CLEAR   T0
+    CLEAR   T5
+    %
+    .CheckSubItem2_1
+    BNE     T1, T3, .CheckSubItem2_2
+    NOP
+    CLEAR   T1
+    BEQ     R0, R0, .CheckSubItem3_1
+    CLEAR   T3
+    .CheckSubItem2_2
+    BNE     T1, T4, .CheckSubItem2_3
+    NOP
+    CLEAR   T1
+    BEQ     R0, R0, .CheckSubItem3_1
+    CLEAR   T4
+    .CheckSubItem2_3
+    BNE     T1, T5, .CheckSubItem3_1
+    NOP
+    CLEAR   T1
+    CLEAR   T5
+    %
+    .CheckSubItem3_1
+    BNE     T2, T3, .CheckSubItem3_2
+    NOP
+    CLEAR   T2
+    BEQ     R0, R0, .CheckIfItemWasFound
+    CLEAR   T3
+    .CheckSubItem3_2
+    BNE     T2, T4, .CheckSubItem3_3
+    NOP
+    CLEAR   T2
+    BEQ     R0, R0, .CheckIfItemWasFound
+    CLEAR   T4
+    .CheckSubItem3_3
+    BNE     T2, T5, .CheckIfItemWasFound
+    NOP
+    CLEAR   T2
+    CLEAR   T5
+    .CheckIfItemWasFound
+    % If all registers are empty it means an item was found
+    %
+    % Clear the subItems slots that are empty (will have a -1 stored)
+    BLTZL   T0, .ClearEmptySubItemSlot_1
+    CLEAR   T0
+    .ClearEmptySubItemSlot_1
+    BLTZL   T1, .ClearEmptySubItemSlot_2
+    CLEAR   T1
+    .ClearEmptySubItemSlot_2
+    BLTZL   T2, .ClearEmptySubItemSlot_3
+    CLEAR   T2
+    .ClearEmptySubItemSlot_3
+    ADD     T0, T0, T1
+    ADD     T0, T0, T2
+    ADD     T0, T0, T3
+    ADD     T0, T0, T4
+    ADD     T0, T0, T5
+    BNEL    T0, R0, .Loop_CheckNextSlot
+    ADDI    V1, V1, 10 % check next slot
+    % Cake was found
+    LW      V0, 0 (V1)
+    .End
+    POP     RA, A0, A1, A2, A3, T0, T1, T2, T3, T4, T5, V1
+    JR      RA
+    NOP
+}
+
+%%%
+
+% Show a little window with a timer and the subItems for every item in the map when the item's timer is >=0
+#new:Function $CookingMinigame_ShowProgressNotif
+{
+    PUSH    R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2, S3, S4, F4, F6, F8
+    % read every item data
+    LIO     S0, $ItemsData
+    CLEAR   S1
+    .Loop
+    LH      A0, 0 (S0) % itemType
+    BNE     A0, R0, .DrawNotif
+    NOP
+    .ResumeLoop
+    ADDIU   S1, S1, 1
+    SLTIU   V0, S1, 20`
+    BNE     V0, R0, .Loop
+    ADDIU   S0, S0, 14` % move offset (because each item uses 14 bytes)
+    BEQ     R0, R0, .End
+    NOP
+    .DrawNotif
+    % check if item's timer is >=0
+    LH      A0, 6 (S0) % itemTimer
+    BLTZ    A0, .ResumeLoop % timer is negative
+    NOP
+    % draw progress
+    %
+    % draw main box
+    %
+    % get itemPos
+    JAL     ~Func:get_item_entity
+    LHU     A0, 2 (S0) % itemIndex
+    LWC1	F4, 8 (V0) % item posX
+    LWC1	F6, C (V0) % item posY
+    LWC1	F8, 10 (V0) % item posZ
+    % convert to int
+    MFC1    A1, F4
+    MFC1    A2, F6
+    MFC1    A3, F8
+    ADDIU   A0, SP, 10
+    SW      A0, 10 (SP) % save posX here (sp[10])
+    ADDIU   A0, SP, 14
+    SW      A0, 14 (SP) % save posY here
+    ADDIU   A0, SP, 18
+    SW      A0, 18 (SP) % save posZ here
+    JAL     ~Func:get_screen_coords
+    CLEAR   A0
+    LW      S2, 10 (SP) % screenPosX
+    LW      S3, 14 (SP) % screenPosY
+    % box body
+    ADDI    A0, S2, -33` % posX
+    ADDI    A1, S3, -49` % posY
+    ORI     A2, R0, 0040 % sizeX
+    ORI     A3, R0, 001F % sizeY
+    ORI     T0, R0, 0 % style
+    JAL     $DrawBox
+    ORI     T1, R0, B2 % opacity
+    % box frame
+    ADDI    A0, S2, -34` % posX
+    ADDI    A1, S3, -51` % posY
+    ORI     A2, R0, 0043 % sizeX
+    ORI     A3, R0, 0023 % sizeY
+    ORI     T0, R0, 1 % style
+    JAL     $DrawBox
+    ORI     T1, R0, B2 % opacity
+    % draw timer
+    LH      A0, 6 (S0) % itemTimer
+    BEQ     A0, R0, .DrawSubItems
+    NOP
+    % timer is above zero
+    %
+    % timer progress
+    ADDI    A0, S2, -25` % posX
+    ADDI    A1, S3, -31` % posY
+    LH      A2, 6 (S0) % itemTimer
+    ORI     A3, R0, 0030 % max timer sizeX
+    SLT     T1, A2, A3
+    % get style
+    BNE     T1, R0, .TimerProgress_StyleSet
+    ORI     T0, R0, 9 % style
+    ORI     T1, R0, 30 % green timer
+    BEQ     A2, T1, .TimerProgress_StyleSet
+    ORI     T0, R0, 20 % style
+    % red timer
+    ORI     T0, R0, 1F % style
+    .TimerProgress_StyleSet
+    BEQL    T1, R0, .TimerProgress_SetSizeX
+    COPY    A2, A3
+    .TimerProgress_SetSizeX
+    ORI     A3, R0, 0009 % sizeY
+    JAL     $DrawBox
+    ORI     T1, R0, B2 % opacity
+    %=========
+    % Icons
+    %=========
+    .DrawSubItems
+    LH      A0, 8 (S0) % subItem1
+    BLTZ    A0, .ResumeLoop
+    NOP
+    %===============
+    % DrawSubItem_1
+    %===============
+    JAL     $IconTable_GetIndex_byItemID
+    NOP
+    COPY    A0, V0 % iconIndex
+    ADDI    A1, S2, -16` % posX
+    JAL     $DrawIcon_SubItem
+    ADDI    A2, S3, -40` % posY
+    % Check subItem2
+    LH      A0, A (S0) % subItem2
+    BLTZ    A0, .ResumeLoop
+    NOP
+    %===============
+    % DrawSubItem_2
+    %===============
+    JAL     $IconTable_GetIndex_byItemID
+    NOP
+    COPY    A0, V0 % iconIndex
+    ADDI    A1, S2, -1` % posX
+    JAL     $DrawIcon_SubItem
+    ADDI    A2, S3, -40` % posY
+    % Check subItem3
+    LH      A0, C (S0) % subItem3
+    BLTZ    A0, .ResumeLoop
+    NOP
+    %===============
+    % DrawSubItem_3
+    %===============
+    JAL     $IconTable_GetIndex_byItemID
+    NOP
+    COPY    A0, V0 % iconIndex
+    ADDI    A1, S2, 15` % posX
+    JAL     $DrawIcon_SubItem
+    ADDI    A2, S3, -40` % posY
+    BEQ     R0, R0, .ResumeLoop
+    NOP
+    .End
+    POP     R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2, S3, S4, F4, F6, F8
+    JR      RA
+    NOP
+}
+
+% A0 = iconIndex
+%
+% A1 = iconPosX
+%
+% A2 = iconPosY
+%
+% Basically setIconPos, setIconScale and drawIcon functions in one.
+#new:Function $DrawIcon_SubItem
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S0
+    % set pos
+    JAL	    ~Func:set_hud_element_render_pos
+    COPY    S0, A0
+    % change scale
+    LIO     A1, 3F0C6666 % 0.548437 % scale
+    JAL     ~Func:set_hud_element_scale
+    COPY    A0, S0
+    % render icon
+    JAL	    ~Func:draw_hud_element_1
+    COPY    A0, S0
+    POP     RA, A0, A1, A2, A3, V0, V1, S0
+    JR      RA
+    NOP
+}
+
+%=========
+% strings
+%=========
+
+#string $String_Continue
+{
+Continue[End]
+}
+
+#string $String_Retry
+{
+Retry[End]
+}
+
+#string $String_Exit
+{
+Exit[End]
+}
+
+#string $String_AreYouSure
+{
+Are you sure?[End]
+}
+
+#string $String_Yes
+{
+Yes[End]
+}
+
+#string $String_No
+{
+No[End]
+}
+
+#string $String_CameraMode
+{
+[Z] [Color 01]Camera:[End]
+}
+
+#string $String_Follow
+{
+Follow[End]
+}
+
+#string $String_Fixed
+{
+Fixed[End]
+}
+
+#string $String_Plus20
+{
++20[End]
+}
+
+#string $String_Plus15
+{
++15[End]
+}
+
+#string $String_Plus10
+{
++10[End]
+}
+
+#string $String_Minus10
+{
+-10[End]
+}

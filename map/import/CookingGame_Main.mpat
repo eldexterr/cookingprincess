@@ -1,0 +1,863 @@
+% Delivery point
+
+#new:Script $Script_DeliveryPoint {
+	% check if peach isn't holding any item
+	Call 	$ReadAddress ( 800740A4 0 *Var1 .False .False )
+	If *Var1 == .False
+		Return
+	EndIf
+	% check which type of item Peach is carrying
+	Call 	$ReadAddress ( $PeachStatus 0 *Var0 0 .False ) % itemType
+	Call 	$ReadAddress ( $PeachStatus 0 *Var1 1 .False ) % itemIndex
+	Switch	*Var0
+	Case == .ItemType:BaseWCake % 7
+		Call	$GetNextOrderItemID ( *Var2 )
+		If *Var2 == -1 % there's no more orders available
+			Return
+		Else
+			Call 	$ReadAddress ( $PeachStatus 1 *Var3 2 .False ) % itemID
+			If *Var3 == *Var2 % correct item
+				% give points
+				%
+				% get order color
+				Call  	$GetNextOrderPointer ( *Var4 )
+				Switch	*Var4
+					Case == $Order1_Data
+						Set	*Var4 $BoxData_White1
+					Case == $Order2_Data
+						Set	*Var4 $BoxData_White2
+					Case == $Order3_Data
+						Set	*Var4 $BoxData_White3
+					Case == $Order4_Data
+						Set	*Var4 $BoxData_White4
+				EndSwitch
+				% get timer color
+				Call 	$ReadAddress ( *Var4 0 *Var5 4 .False ) % get boxColor1 - green
+				Call 	$ReadAddress ( $Minigame_Data 2 *Var6 4 .False ) % get score
+				Switch *Var5
+					Case == FF % White
+						Add  *Var6 20` % give 20 points
+					Case == FA % Yellow
+						Add  *Var6 15`
+					Case == 00 % Red
+						Add  *Var6 10`
+				EndSwitch
+				If *Var6 > 9999` % cap
+					Set *Var6 9999`
+				EndIf
+				Call 	$WriteAddress ( $Minigame_Data 2 *Var6 4 .False )
+				Call	$SetNextOrderState ( 1 40` ) % correct
+                Call    PlaySound ( 0010 ) % game saved
+			Else % incorrect item
+				% decrease points
+				Call 	$ReadAddress ( $Minigame_Data 2 *Var2 4 .False ) % get score
+				Sub	*Var2 10`
+				If *Var2 < 0
+					Set *Var2 0
+				EndIf
+				Call 	$WriteAddress ( $Minigame_Data 2 *Var2 4 .False )
+				Call	$SetNextOrderState ( 2 40` ) % wrong
+                Call    PlaySound ( 021D ) % error
+			EndIf
+			Call    $DeleteItemData ( *Var1 )
+			Call	$RunFunction ( $clear_peach_status )
+		EndIf
+	EndSwitch
+    Return
+    End
+}
+
+% Mix points
+
+#new:Script $Script_MixPoint {
+	% check if peach isn't holding any item
+	Call 	$ReadAddress ( 800740A4 0 *Var1 .False .False )
+	If *Var1 == .False
+		Return
+	EndIf
+	% check which type of item Peach is carrying
+	Call 	$ReadAddress ( $PeachStatus 0 *Var0 0 .False ) % itemType
+	Call 	$ReadAddress ( $PeachStatus 0 *Var1 1 .False ) % itemIndex
+	Switch *Var0
+		Case == .ItemType:Bowl % 2
+			Call	$GetSubItemsPeach ( *Var2 *Var3 *Var4 )
+			Set		*Var5 0
+			If *Var2 > 0
+				Add *Var5 1
+			EndIf
+			If *Var3 > 0
+				Add *Var5 1
+			EndIf
+			If *Var4 > 0
+				Add *Var5 1
+			EndIf
+			Switch *Var5 % amount of items inside the bowl
+				Case == 0
+					SetGroup 0
+					SuspendAll 2
+					Call	DisablePlayerInput ( .True )
+					Call 	$WriteAddress ( $PauseByte 0 .True .False .False )
+					Call	ShowMessageAtScreenPos ( $String_Empty_Bowl A0 28 )
+					Call 	$WriteAddress ( $PauseByte 0 .False .False .False )
+					ResumeAll 2
+					Call	DisablePlayerInput ( .False )
+				Case == 1
+					SetGroup 0
+					SuspendAll 2
+					Call	DisablePlayerInput ( .True )
+					Call 	$WriteAddress ( $PauseByte 0 .True .False .False )
+					Call	ShowMessageAtScreenPos ( $String_Bowl_OnlyOneItem A0 28 )
+					Call 	$WriteAddress ( $PauseByte 0 .False .False .False )
+					ResumeAll 2
+					Call	DisablePlayerInput ( .False )
+				Default
+					Call	DisablePlayerInput ( .True )
+					% hide item while mixing
+					Call	SetItemFlags ( *Var1 00000001 .False ) % turn item invisible
+					Set		*Var8 0 % timer coolDown
+					Loop
+						Call	SetPlayerAnimation ( 000C001F ) % mixing
+						% apply a timer's cooldown
+						Add *Var8 1
+						If	*Var8 >= 2
+							Call	$AddFrames_ItemTimer ( *Var1 1 )
+							Set *Var8 0 % clear cooldown
+						EndIf
+						Wait	1
+						% Var0=timer
+						%
+						% check if timer is full
+						If *Var0 >= 48` % item has been fully mixed
+							Call	SetPlayerAnimation ( 000A0007 ) % idle - carrying item
+							Call 	$ReplaceItem ( *Var1 .Item:CakeMixed .ItemType:BowlMixed *Var0 )
+							% Set new item timer as zero
+							Call    $GetItemData ( *Var0 *Var6 )
+							Call 	$WriteAddress ( *Var6 1 .False 6 .False ) % set MixedBowl itemTimer as zero, to show the subItemData
+							Call	DisablePlayerInput ( .False )
+                            Call    PlaySound ( 0010 ) % game saved
+							BreakLoop
+						EndIf
+						Call 	$ReadAddress ( 80074026 1 *Var5 .False .False ) % hold-inputs(2)
+						If *Var5 !& .Buttons:A % A button isn't being held
+							Call	SetPlayerAnimation ( 000A0007 ) % idle - carrying item
+							Call	SetItemFlags  ( *Var1 00000001 .True ) % turn item visible
+							Call    $GetItemData  ( *Var1 *Var6 )
+							Call 	$WriteAddress ( *Var6 1 .False 6 .False ) % set itemTimer as zero
+							Call	DisablePlayerInput ( .False )
+                            Call    PlaySound ( 0006 ) % unequip badge
+							BreakLoop
+						EndIf
+					EndLoop
+			EndSwitch
+		Case == .ItemType:BowlMixed % 3
+			SetGroup 0
+			SuspendAll 2
+			Call	DisablePlayerInput ( .True )
+			Call 	$WriteAddress ( $PauseByte 0 .True .False .False )
+			Call	ShowMessageAtScreenPos ( $String_AlreadyMixed A0 28 )
+			Call 	$WriteAddress ( $PauseByte 0 .False .False .False )
+			ResumeAll 2
+			Call	DisablePlayerInput ( .False )
+		Case == .ItemType:Ingredient % 1
+			SetGroup 0
+			SuspendAll 2
+			Call	DisablePlayerInput ( .True )
+			Call 	$WriteAddress ( $PauseByte 0 .True .False .False )
+			Call	ShowMessageAtScreenPos ( $String_YouNeed_Bowl A0 28 )
+			Call 	$WriteAddress ( $PauseByte 0 .False .False .False )
+			ResumeAll 2
+			Call	DisablePlayerInput ( .False )
+	EndSwitch
+    Return
+    End
+}
+
+% Trash bin
+
+#new:Script $Script_TrashBin {
+	% check if peach isn't holding any item
+	Call 	$ReadAddress ( 800740A4 0 *Var1 .False .False )
+	If *Var1 == .False
+		Return
+	EndIf
+	% check which type of item Peach is carrying
+	Call 	$ReadAddress ( $PeachStatus 0 *Var0 0 .False ) % itemType
+	Call 	$ReadAddress ( $PeachStatus 0 *Var1 1 .False ) % itemIndex
+	Switch *Var0
+		CaseOR == .ItemType:Ingredient % 1
+		CaseOR == .ItemType:Decoration % 8
+		CaseOR == .ItemType:Cuttable % 9
+		CaseOR == .ItemType:BaseWCake % 7
+		CaseOR == .ItemType:Mistake % 10`
+			Call    $DeleteItemData ( *Var1 )
+			Call	$RunFunction ( $clear_peach_status )
+			Call	PlaySound ( 0393 )
+		EndCaseGroup
+		Case == .ItemType:Bowl % 2
+			Call	$RunFunction ( $clear_peachsItem_subItemData )
+			% clear timer
+			Call 	$GetItemData  ( *Var1 *Var2 )
+			Call 	$WriteAddress ( *Var2 1 FFFF 6 .False ) % clear item's timer
+			Call	PlaySound ( 0393 )
+		Case == .ItemType:BowlMixed % 3
+			Call	$RunFunction  ( $clear_peachsItem_subItemData ) % clear peach's item subItem data
+			% clear timer
+			Call 	$GetItemData  ( *Var1 *Var2 )
+			Call 	$WriteAddress ( *Var2 1 FFFF 6 .False ) % clear item's timer
+			Call 	$ReplaceItem  ( *Var1 .Item:CakeBowl .ItemType:Bowl .False ) % replace mixed bowl for an empty bowl
+			Call	PlaySound ( 0393 )
+		CaseOR == .ItemType:Mold % 4
+		CaseOR == .ItemType:MoldCooked % 5
+			Call	$RunFunction  ( $clear_peachsItem_subItemData ) % clear peach's item subItem data
+			% clear timer
+			Call 	$GetItemData  ( *Var1 *Var2 )
+			Call 	$WriteAddress ( *Var2 1 FFFF 6 .False ) % clear item's timer
+			Call 	$ReplaceItem  ( *Var1 .Item:CakePan .ItemType:Mold .False )
+			Call	PlaySound ( 0393 )
+		EndCaseGroup
+		Case == .ItemType:Base % 6 % scrapped
+	EndSwitch
+    Return
+    End
+}
+
+#new:Script $Script_Stove {
+	% check which type of item Peach is carrying
+	Call 	$ReadAddress ( $PeachStatus 0 *Var0 0 .False ) % itemType
+	Call 	$ReadAddress ( $PeachStatus 0 *Var1 1 .False ) % itemIndex
+	Call	$GetVarFromVar	( *VarA *Var2 )
+	If	*Var2 == 0 % stove is empty
+		Switch *Var0
+			Case == .ItemType:BowlMixed % 3
+				SetGroup 0
+				SuspendAll 2
+				Call	DisablePlayerInput ( .True )
+				Call 	$WriteAddress ( $PauseByte 0 .True .False .False )
+				Call	ShowMessageAtScreenPos ( $String_Stove_MixedBowl A0 28 )
+				Call 	$WriteAddress ( $PauseByte 0 .False .False .False )
+				ResumeAll 2
+				Call	DisablePlayerInput ( .False )
+			Case == .ItemType:MoldCooked % 5
+				SetGroup 0
+				SuspendAll 2
+				Call	DisablePlayerInput ( .True )
+				Call 	$WriteAddress ( $PauseByte 0 .True .False .False )
+				Call	ShowMessageAtScreenPos ( $String_Stove_MoldCooked A0 28 )
+				Call 	$WriteAddress ( $PauseByte 0 .False .False .False )
+				ResumeAll 2
+				Call	DisablePlayerInput ( .False )
+			Case == .ItemType:Mold % 4
+				Call 	$ReadAddress ( $PeachStatus 1 *Var2 2 .False ) % get itemID
+				Switch *Var2
+					Case == .Item:CakePan
+						SetGroup 0
+						SuspendAll 2
+						Call	DisablePlayerInput ( .True )
+						Call 	$WriteAddress ( $PauseByte 0 .True .False .False )
+						Call	ShowMessageAtScreenPos ( $String_Stove_EmptyMold A0 28 )
+						Call 	$WriteAddress ( $PauseByte 0 .False .False .False )
+						ResumeAll 2
+						Call	DisablePlayerInput ( .False )
+					CaseOR == .Item:CakeBatter
+					CaseOR == .Item:CakeBatterMistake
+						% check if cake has been already cooked
+						Call	$AddFrames_ItemTimer ( *Var1 0 )
+						If *Var0 >= 30 % already cooked
+                            Call    PlaySound ( 021D ) % error
+							Return
+						EndIf
+						Call	$SetVarFromVar	( *VarA .True ) % stove is working
+						Call	$SetVarFromVar	( *VarB *Var1 ) % stove's itemIndex
+						% hide item
+						Call	SetItemFlags ( *Var1 00000001 .False ) % turn item invisible
+						Call 	$WriteAddress ( 800740A4 0 .False .False .False ) % don't use carrying animations
+						Call 	$WriteAddress ( $PeachStatus 0 .False .False .False ) % unattach item
+						Call	GetPlayerAnimation ( *Var8 )
+						If *Var8 == 000A0007 % idle
+							Call	SetPlayerAnimation ( 000A0001 )
+						Else % running animation
+							Call	SetPlayerAnimation ( 000A0003 )
+						EndIf
+						Set		*Var8 0 % timer coolDown
+						Set		*Var9 0 % 2nd timer, used to burn the cake
+						Set		*Var4 15` % warning sfx timer
+						Call	$AddFrames_ItemTimer ( *Var1 0 ) % save timer in var0
+						If *Var0 == -1 % If timer isn't visible
+							Call	$AddFrames_ItemTimer ( *Var1 1 ) % show progress
+						EndIf
+                        Call    PlaySound ( 204C ) % door?
+						Loop
+							% check if the stove got stopped
+							Call 	$ReadAddress ( $PeachStatus 0 *Var2 0 .False ) % itemType
+							If *Var2 != 0
+								Call 	$ReadAddress ( $PeachStatus 0 *Var2 1 .False ) % itemIndex
+								If *Var1 == *Var2 % stove's items is the same as peach's item
+									BreakLoop
+								EndIf
+							EndIf
+							% apply a timer's cooldown
+							Add *Var8 1
+							If	*Var8 >= 15`
+								Call	$AddFrames_ItemTimer ( *Var1 0 ) % save timer in var0
+								If *Var0 >= 30 % timer full
+									Call	$GetItemData ( *Var1 *Var2 )
+									Call 	$WriteAddress ( *Var2 1 .ItemType:MoldCooked 0 .False ) % set itemType as cooked
+									Set 	*Var8 0
+									Add	 	*Var9 1
+									If *Var9 >= 15` % cake got burned
+                                        Call    PlaySound ( 00F5 )
+										Call 	$ReplaceItem ( *Var1 .Item:CakeBatterBurned .ItemType:MoldCooked *Var1 )
+										Call	$SetVarFromVar	( *VarB *Var1 )
+										Call	SetItemFlags ( *Var1 00000001 .False ) % turn item invisible
+										Call	$AddFrames_ItemTimer ( *Var1 2 )
+										Call	$GetVarFromVar	( *VarC *Var3 )
+										% Stove's door folder need to always have 2 models in it,
+										% and the door need to always be the 1st one in the folder
+										Sub 	*Var3 2
+										Call	GetModelCenter ( *Var3 )
+										Sub		*Var2 4 % z
+        								Call  	PlayEffect    ( ~FX:RingBlast:Red *Var0 *Var1 *Var2 *Fixed[0.7] 20` .False .False .False .False .False .False .False )
+										BreakLoop
+									EndIf
+								Else
+									Call	$AddFrames_ItemTimer ( *Var1 1 )
+									If *Var0 >= 30 % timer full
+										Call	$GetItemData  ( *Var1 *Var2 )
+										Call 	$WriteAddress ( *Var2 1 .ItemType:MoldCooked 0 .False ) % set itemType as cooked
+                                        Call    PlaySound ( 03F3 ) % cake ready
+									EndIf
+									Set *Var8 0 % clear cooldown
+								EndIf
+							EndIf
+							% update warning sfx
+							Call	$AddFrames_ItemTimer ( *Var1 0 ) % save timer in var0
+							If *Var0 >= 30 % timer full
+								Sub		*Var4 *Var9
+								Sub		*Var4 1
+								If *Var4 <= 0
+									Set 	*Var4 60`
+									Call	PlaySound ( 0005 ) % warning
+								EndIf
+							EndIf
+							Wait	1
+						EndLoop
+					EndCaseGroup
+				EndSwitch
+		EndSwitch
+	Else % stove has an item
+		If *Var0 == .ItemType:None % remove item from the stove
+			Call	$GetVarFromVar	( *VarB *Var3 )
+			Call	$SetVarFromVar	( *VarA .False ) % stove (bool)
+			Call	$SetVarFromVar	( *VarB .False ) % clear stove's itemIndex
+			Call	SetItemFlags  ( *Var3 00000001 .True ) % turn item visible
+			Call 	$GetItemData ( *Var3 *Var0 )
+			Call 	$ReadAddress ( *Var0 1 *Var1 4 .False ) % itemID
+			Call 	$ReadAddress ( *Var0 1 *Var2 0 .False ) % itemType
+			Call	$SetPeachItem ( *Var3 *Var1 *Var2 )
+            Call    PlaySound ( 204C ) % door?
+		EndIf
+	EndIf
+	Return
+	End
+}
+
+% Call	$GetVarFromVar	( *VarX *VarY )
+%
+% Get a var being inside another one
+#new:Function $GetVarFromVar
+{
+	PUSH	RA, A0, A1, A2, A3, V0, V1, S0, S1
+	% get args
+	COPY	S0, A0
+	LW		A1, C (A0)
+	JAL		~Func:get_variable
+	LW		A1, 0 (A1) % arg0
+	% get var inside var
+	COPY	A0, S0
+	JAL		~Func:get_variable
+	COPY	A1, V0
+	% save the actual value from that var in the one from arg1
+	COPY	A0, S0
+	COPY	A2, V0
+	LW		A1, C (A0)
+	JAL		~Func:set_variable
+	LW		A1, 4 (A1) % arg1
+	POP		RA, A0, A1, A2, A3, V0, V1, S0, S1
+	JR		RA
+	ORI		V0, R0, 2
+}
+
+% Call	$SetVarFromVar	( *VarX newValue )
+%
+% Set the value from a var that is inside another one
+#new:Function $SetVarFromVar
+{
+	PUSH	RA, A0, A1, A2, A3, V0, V1, S0, S1
+	% get args
+	COPY	S0, A0
+	LW		A1, C (A0)
+	JAL		~Func:get_variable
+	LW		A1, 0 (A1) % arg0
+	COPY	S1, V0
+	COPY	A0, S0
+	LW		A1, C (A0)
+	JAL		~Func:get_variable
+	LW		A1, 4 (A1) % arg1
+	COPY	A0, S0
+	COPY	A1, S1
+	JAL		~Func:set_variable
+	COPY	A2, V0
+	POP		RA, A0, A1, A2, A3, V0, V1, S0, S1
+	JR		RA
+	ORI		V0, R0, 2
+}
+
+% Cutting table
+
+#new:Script $Script_Cutting {
+	% check if peach isn't holding any item
+	Call 	$ReadAddress ( 800740A4 0 *Var1 .False .False )
+	If *Var1 == .False
+		Return
+	EndIf
+	% check which type of item Peach is carrying
+	Call 	$ReadAddress ( $PeachStatus 0 *Var0 0 .False ) % itemType
+	Call 	$ReadAddress ( $PeachStatus 0 *Var1 1 .False ) % itemIndex
+	Switch *Var0
+		Case == .ItemType:Cuttable % 9
+				Call	DisablePlayerInput ( .True )
+				% hide item while mixing
+				Call	SetItemFlags ( *Var1 00000001 .False ) % turn item invisible
+				Set		*Var8 0 % timer coolDown
+                Set     *Var9 0 % 2nd timer (used to play the sfx)
+				Loop
+					Call	SetPlayerAnimation ( 000C0015 )
+					% apply a timer's cooldown
+					Add *Var8 1
+                    Add *Var9 1
+					If	*Var8 >= 2
+						Call	$AddFrames_ItemTimer ( *Var1 1 )
+						Set *Var8 0 % clear cooldown
+					EndIf
+                    If *Var9 >= 5 % play sound
+                        Call    PlaySound ( 2066 )
+                        Set     *Var9 0
+                    EndIf                    
+					Wait	1
+					% Var0=timer
+					%
+					% check if timer is full
+					If *Var0 >= 30 % item has been completely sliced
+						Call	SetPlayerAnimation ( 000A0007 ) % idle - carrying item
+						Call    $GetItemData ( *Var1 *Var6 )
+						Call 	$WriteAddress ( *Var6 1 FFFF 6 .False ) % reset timer
+						Call 	$ReadAddress  ( *Var6 1 *Var7 4 .False ) % get itemID
+						Switch *Var7
+							Case == .Item:BakingStrawberry
+								Set *Var7 .Item:BowlStrawberries
+							Case == .Item:BlueBerry
+								Set *Var7 .Item:BowlBlueBerries
+							Case == .Item:BubbleBerry
+								Set *Var7 .Item:BowlBubbleBerries
+						EndSwitch
+						Call 	$ReplaceItem ( *Var1 *Var7 .ItemType:Decoration *Var0 )
+						Call	DisablePlayerInput ( .False )
+                        Call    PlaySound ( 0010 ) % game saved
+						BreakLoop
+					EndIf
+					Call 	$ReadAddress ( 80074026 1 *Var5 .False .False ) % hold-inputs(2)
+					If *Var5 !& .Buttons:A % A button isn't being held
+						Call	SetPlayerAnimation ( 000A0007 ) % idle - carrying item
+						Call	SetItemFlags  ( *Var1 00000001 .True ) % turn item visible
+						Call    $GetItemData  ( *Var1 *Var6 )
+						Call 	$WriteAddress ( *Var6 1 FFFF 6 .False ) % reset itemTimer
+						Call	DisablePlayerInput ( .False )
+                        Call    PlaySound ( 0006 ) % unequip badge
+						BreakLoop
+					EndIf
+				EndLoop
+	EndSwitch
+    Return
+    End
+}
+
+% Dispatchers
+
+#new:Script $Script_Dispatcher_Sugar {
+	Set	*Var0 .Item:BakingSugar
+	Set *Var1 .ItemType:Ingredient
+	Exec $Script_GiveItem
+    Return
+    End
+}
+
+#new:Script $Script_Dispatcher_Egg {
+	Set	*Var0 .Item:BakingEgg
+	Set *Var1 .ItemType:Ingredient
+	Exec $Script_GiveItem
+    Return
+    End
+}
+
+#new:Script $Script_Dispatcher_CakeMix {
+	Set	*Var0 .Item:CakeMix
+	Set *Var1 .ItemType:Ingredient
+	Exec $Script_GiveItem
+    Return
+    End
+}
+
+#new:Script $Script_Dispatcher_Cream {
+	Set	*Var0 .Item:BakingCream
+	Set *Var1 .ItemType:Decoration
+	Exec $Script_GiveItem
+    Return
+    End
+}
+
+#new:Script $Script_Dispatcher_Strawberry {
+	Set	*Var0 .Item:BakingStrawberry
+	Set *Var1 .ItemType:Cuttable
+	Exec $Script_GiveItem
+    Return
+    End
+}
+
+#new:Script $Script_Dispatcher_BlueBerry {
+	Set	*Var0 .Item:BlueBerry
+	Set *Var1 .ItemType:Cuttable
+	Exec $Script_GiveItem
+    Return
+    End
+}
+
+#new:Script $Script_Dispatcher_BubbleBerry {
+	Set	*Var0 .Item:BubbleBerry
+	Set *Var1 .ItemType:Cuttable
+	Exec $Script_GiveItem
+    Return
+    End
+}
+
+#new:Script $Script_Dispatcher_Base {
+	Set	*Var0 .Item:VolcanoVase
+	Set *Var1 .ItemType:Base
+	Exec $Script_GiveItem
+    Return
+    End
+}
+
+% *out = var0 = itemIndex
+%
+% [!] Writes in var0-2
+#new:Script $Script_GiveItem
+{
+	% check if peach is already holding an item
+	Call 	$ReadAddress ( 800740A4 0 *Var2 .False .False )
+	If *Var2 != 0
+		Return
+	EndIf
+	ExecWait $Script_CheckItemCap
+	If *Var2 == -1
+		Return
+	EndIf
+	Set		*Var2 *Var1
+	Set		*Var1 *Var0
+	Call 	$WriteAddress ( 800740A4 0 1 .False .False ) % do carrying animation
+	Call	DropItemEntity ( *Var0 0 -1000 0 .ItemSpawnMode:Decoration .False )
+	Call	$SetPeachItem ( *Var0 *Var1 *Var2 )
+	Call 	$AddItemData ( *Var2 *Var0 *Var1 )
+    Call    PlaySound ( 03FE ) % ?
+	Return
+	End
+}
+
+% var4 = $ordersTable_lvl
+%
+% var5 = amount of items in table
+%
+% Add new orders to the queue
+#new:Script $Script_DispatchNewOrders
+{
+	Loop % wait until the game starts
+		If *GameState == 4 % cooking game - step
+			BreakLoop
+		EndIf
+		Wait	1
+	EndLoop
+	Set		*Var3 650` % add a new order every 650 frames
+	Set		*Var2 *Var3
+	Loop
+		Sub *Var2 1
+		If *Var2 <= 0 % Time to add a new order
+			Set *Var2 *Var3
+			Call  	$GetNextFreeOrderPointer ( *Var0 )
+			If *Var0 != -1 % currently no more orders can't be added
+				Set 	*Var0 *Var4
+				Set 	*Var1 *Var5
+				Exec	$Script_AddNewOrder
+			EndIf
+		Else % Isn't time for a new order, but check if the queue is empty
+			Call	$GetNextOrderItemID ( *Var0 )
+			If *Var0 == -1
+				Set	*Var2 *Var3 % reset timer
+				Set 	*Var0 *Var4
+				Set 	*Var1 *Var5
+				Exec	$Script_AddNewOrder
+			EndIf
+		EndIf
+		Wait 2
+	EndLoop
+	Return
+	End
+}
+
+% Var0 = $OrdersTable
+%
+% Var1 = Table's Entries
+#new:Script $Script_AddNewOrder
+{
+	% If there's zero orders for the players, try to add new ones
+	Call  	$GetNextFreeOrderPointer ( *Var2 )
+	If *Var2 == -1 % currently no more orders can't be added
+		Return
+	EndIf
+	% get item
+	Sub		*Var1 1
+	Call	RandInt ( *Var1 *Var3 )
+	Mul		*Var3 4
+	Add		*Var0 *Var3
+	Call	$ReadAddress  ( *Var0 2 *Var3 0 .False ) % get itemID for new order
+	Call	$WriteAddress ( *Var2 1 0F00 4 .False ) % set timer as max
+	Call	$WriteAddress ( *Var2 1 *Var3 2 .False ) % set itemID
+	Call	$WriteAddress ( *Var2 0 0 6 .False ) % set state
+	Return
+	End
+}
+
+#new:Script $Script_KillPlayer
+{
+    % Script is already being ran?
+    %
+    % Check if player inputs are disabled
+    Call 	$ReadAddress ( 8010EFC8 2 *Var0 .False .False ) % PlayerFlags
+    If  *Var0 & 00002000 % DisablePlayerInputs
+        Return
+    EndIf
+    Call    DisablePlayerInput ( .True )
+    %%%%%%
+    % remove item
+    %
+    % check if peach is holding any item
+	Call 	$ReadAddress ( 800740A4 0 *Var1 .False .False )
+	If *Var1 != .False
+        % check which type of item Peach is carrying
+        Call 	$ReadAddress ( $PeachStatus 0 *Var0 0 .False ) % itemType
+        Call 	$ReadAddress ( $PeachStatus 0 *Var1 1 .False ) % itemIndex
+        Switch *Var0
+            CaseOR == .ItemType:Ingredient % 1
+            CaseOR == .ItemType:Decoration % 8
+            CaseOR == .ItemType:Cuttable % 9
+            CaseOR == .ItemType:BaseWCake % 7
+            CaseOR == .ItemType:Mistake % 10`
+                Call    $DeleteItemData ( *Var1 )
+                Call	$RunFunction ( $clear_peach_status )
+            EndCaseGroup
+            CaseOR == .ItemType:Bowl % 2
+            CaseOR == .ItemType:BowlMixed % 3
+                Call	$RunFunction ( $clear_peachsItem_subItemData )
+                % clear timer
+                Call 	$GetItemData  ( *Var1 *Var2 )
+                Call 	$WriteAddress ( *Var2 1 FFFF 6 .False ) % clear item's timer
+                If *Var0 == .ItemType:BowlMixed % 3
+                    Call 	$ReplaceItem  ( *Var1 .Item:CakeBowl .ItemType:Bowl *Var1 ) % replace mixed bowl for an empty bowl
+                EndIf
+                Call	$RunFunction ( $clear_peach_status )
+                % put item back to his original position
+                Call    $GetColliderItem ( ~Collider:itemPos_Bowl1 *Var3 )
+                If *Var3 == -1
+                    Call    $UpdateItemColliderTrasform ( *Var1 ~Collider:itemPos_Bowl1 )
+                    Wait    1
+                    Goto    ShowFX
+                EndIf
+                %
+                Call    $GetColliderItem ( ~Collider:itemPos_Bowl2 *Var3 )
+                If *Var3 == -1
+                    Call    $UpdateItemColliderTrasform ( *Var1 ~Collider:itemPos_Bowl2 )
+                    Wait    1
+                    Goto    ShowFX
+                EndIf
+                % None of this positions are free put item on the first free position available
+                Set *Var3 .False
+                Loop
+                    Call    $GetColliderData ( *Var3 *Var4 )
+                    Call    $ReadAddress ( *Var4 2 *Var4 .False .False ) % collider(0x00) = flags
+                    If *Var4 & 10000000 % skip this collider
+                        Add *Var3 1
+                    Else
+                        If *Var4 > 0
+                            Call    $GetColliderItem ( *Var3 *Var4 )
+                            If *Var4 == -1
+                                Call    $UpdateItemColliderTrasform ( *Var1 *Var3 )
+                                BreakLoop
+                            EndIf
+                        EndIf
+                        Add *Var3 1
+                    EndIf
+                EndLoop
+            EndCaseGroup
+            CaseOR == .ItemType:Mold % 4
+            CaseOR == .ItemType:MoldCooked % 5
+                Call	$RunFunction ( $clear_peachsItem_subItemData )
+                % clear timer
+                Call 	$GetItemData  ( *Var1 *Var2 )
+                Call 	$WriteAddress ( *Var2 1 FFFF 6 .False ) % clear item's timer
+                If *Var0 == .ItemType:MoldCooked % 5
+                    Call 	$ReplaceItem  ( *Var1 .Item:CakePan .ItemType:Mold *Var1 )
+                EndIf
+                Call	$RunFunction ( $clear_peach_status )
+                % put item back to his original position
+                Call    $GetColliderItem ( ~Collider:itemPos_Mold1 *Var3 )
+                If *Var3 == -1
+                    Call    $UpdateItemColliderTrasform ( *Var1 ~Collider:itemPos_Mold1 )
+                    Wait    1
+                    Goto    ShowFX
+                EndIf
+                %
+                Call    $GetColliderItem ( ~Collider:itemPos_Mold2 *Var3 )
+                If *Var3 == -1
+                    Call    $UpdateItemColliderTrasform ( *Var1 ~Collider:itemPos_Mold2 )
+                    Wait    1
+                    Goto    ShowFX
+                EndIf
+                % None of this positions are free put item on the first free position available
+                Set *Var3 .False
+                Loop
+                    Call    $GetColliderData ( *Var3 *Var4 )
+                    Call    $ReadAddress ( *Var4 2 *Var4 .False .False ) % collider(0x00) = flags
+                    If *Var4 & 10000000 % skip this collider
+                        Add *Var3 1
+                    Else
+                        If *Var4 > 0
+                            Call    $GetColliderItem ( *Var3 *Var4 )
+                            If *Var4 == -1
+                                Call    $UpdateItemColliderTrasform ( *Var1 *Var3 )
+                                BreakLoop
+                            EndIf
+                        EndIf
+                        Add *Var3 1
+                    EndIf
+                EndLoop
+            EndCaseGroup
+        EndSwitch
+    EndIf
+    % Replicate the animation from function DoNpcDefeat
+    Label   ShowFX
+    Loop % Set Animation
+        Call    GetPlayerActionState ( *Var0 )
+        If *Var0 == .ActionState:Idle
+            Call    SetPlayerAnimation ( 000A0001 )
+            Call    SetPlayerAnimation ( 000C0029 ) % dead
+            BreakLoop
+        EndIf
+        Wait    1
+    EndLoop
+    Call    PlaySound ( 203E )
+    Wait	20`
+    % sprite starts flashing
+    Thread
+        Loop 5
+            Call    $WriteBitFlag ( 8010EFCC .False 2 5 .True ) % PlayerFlags2[2](bit5)=Invicible
+            Wait	1
+            Call    $WriteBitFlag ( 8010EFCC .False 2 5 .False )
+            Wait	1
+        EndLoop
+        % disappear player
+        Call    $WriteBitFlag ( 8010EFCC .False 2 5 .True )
+        Call    HidePlayerShadow ( .True )
+    EndThread
+    % FXs
+    Wait	3
+    Call	PlaySound ( 03E5 ) % NpcDefeat
+    Call	GetPlayerPos ( *Var2 *Var3 *Var4 )
+	Add		*Var4 2 % z
+    Call  	PlayEffect 	( ~FX:BigSmokePuff *Var2 *Var3 *Var4 .False .False .False .False .False .False .False .False .False )
+    Call  	PlayEffect 	( ~FX:Stars:Fountain2 *Var2 *Var3 *Var4 0 -100` 10` 8 .False .False .False .False .False ) % XYZ Angle YRadious Height Stars
+    % respawn player
+    Wait    10`
+    Call    SetPlayerPos ( ~Vec3d:Entry0 )
+	Call    HidePlayerShadow ( .False )
+    Call    SetPlayerAnimation ( 000A0001 )
+    Call    PlaySound  ( .Sound:SmokeBurst )
+    Call    GetPlayerPos ( *Var0 *Var1 *Var2 )
+    Add     *Var2 2 % z
+    Call    PlayEffect ( ~FX:BigSmokePuff *Var0 *Var1 *Var2 ) % xyz
+    Call    $WriteBitFlag ( 8010EFCC .False 2 5 .False ) % stop being invisible
+    Call    DisablePlayerInput ( .False )
+    Return
+    End
+}
+
+%=========
+% strings
+%=========
+
+% Bowl
+
+#string $String_YouNeed_Bowl
+{
+[Style Inspect][DelayOff]
+You need to have all ingredients[BR]
+[SaveColor][Color:07]inside[RestoreColor] a [SaveColor][Color:07]bowl[RestoreColor] first.
+[Wait][End]
+}
+
+#string $String_AlreadyMixed
+{
+[Style Inspect][DelayOff]
+This bowl has been [SaveColor][Color:07]already mixed[RestoreColor][BR]
+try using [SaveColor][Color:07]another one[RestoreColor] or [SaveColor][Color:07]throwing[RestoreColor][BR]
+the current mix into the [SaveColor][Color:07]trash bin[RestoreColor].
+[Wait][End]
+}
+
+#string $String_Empty_Bowl
+{
+[Style Inspect][DelayOff]
+Looks like the bowl is [SaveColor][Color:07]empty[RestoreColor], try[BR]
+[SaveColor][Color:07]adding a few items[RestoreColor] into the bowl[BR]
+first.
+[Wait][End]
+}
+
+#string $String_Bowl_OnlyOneItem
+{
+[Style Inspect][DelayOff]
+Looks like the bowl has a [SaveColor][Color:07]single[BR]
+item[RestoreColor], try [SaveColor][Color:07]adding a few ones[RestoreColor][BR]
+instead.
+[Wait][End]
+}
+
+%
+
+#string $String_Stove_MixedBowl
+{
+[Style Inspect][DelayOff]
+Pour the [SaveColor][Color:07]mix[RestoreColor] into a [SaveColor][Color:07]pan[RestoreColor] first.
+[Wait][End]
+}
+
+#string $String_Stove_EmptyMold
+{
+[Style Inspect][DelayOff]
+Add a [SaveColor][Color:07]mix[RestoreColor] into the pan first.
+[Wait][End]
+}
+
+#string $String_Stove_MoldCooked
+{
+[Style Inspect][DelayOff]
+Cake already cooked.
+[Wait][End]
+}

@@ -1,0 +1,92 @@
+% This file has the code neccesary to show the little cursor next to the collision you're facing
+
+/% New collider flags
+
+10000000 = don't show cursor
+01000000 = right collider
+02000000 = back collider
+04000000 = left collider
+08000000 = front collider
+
+These flags are neccesary to show the cursor in the correct place
+%/
+
+#new:Script $Script_UpdateCursor {
+    Set     *VarE ~Model:highlight
+    Loop
+        Call    $ReadAddress ( 8015A562 1 *Var0 .False .False ) % get the ID from the current collider the player is facing right now
+        If *Var0 == FFFF % the player isn't touching any collider
+            Call    TranslateModel ( *VarE 0 -1000` 0 )
+            Wait    1
+            Goto    End
+        EndIf
+        Call    $GetColliderData ( *Var0 *Var1 )
+        Call    $ReadAddress ( *Var1 2 *Var1 .False .False ) % collider(0x00) = flags
+        If *Var1 & 10000000 % don't show cursor
+            Call    TranslateModel ( *VarE 0 -1000` 0 )
+            Wait    1
+            Goto    End
+        EndIf
+        If *Var1 & 01000000 % right collider
+            Call    GetColliderCenter ( *Var0 )
+            Sub     *Var0 15` % x
+            Add     *Var1 13` % y
+            Call    TranslateModel ( *VarE *Var0 *Var1 *Var2 )
+        EndIf
+        If *Var1 & 02000000 % back collider
+            Call    GetColliderCenter ( *Var0 )
+            Add     *Var1 13` % y
+            Sub     *Var2 15` % z
+            Call    TranslateModel ( *VarE *Var0 *Var1 *Var2 )
+        EndIf
+        If *Var1 & 04000000 % left collider
+            Call    GetColliderCenter ( *Var0 )
+            Add     *Var0 15` % x
+            Add     *Var1 13` % y
+            Call    TranslateModel ( *VarE *Var0 *Var1 *Var2 )
+        EndIf
+        If *Var1 & 08000000 % front collider
+            Call    GetColliderCenter ( *Var0 )
+            Add     *Var1 13` % y
+            Add     *Var2 15` % z
+            Call    TranslateModel ( *VarE *Var0 *Var1 *Var2 )
+        EndIf
+        Wait    1
+        Label   End
+    EndLoop
+    Return
+    End
+}
+
+% var0 = colliderID
+%
+% *out = var0/1/2 = itemPos' vec3d
+%
+% Get the position an item will get set if Peach place that item there.
+#new:Script $Script_GetItemPosForCollider
+{
+    Call    $GetColliderData ( *Var0 *Var1 )
+    Call    $ReadAddress ( *Var1 2 *Var1 .False .False ) % collider(0x00) = flags
+    If *Var1 & 01000000 % right collider
+        Call    GetColliderCenter ( *Var0 )
+        Sub     *Var0 15` % x
+        Add     *Var1 12` % y
+    EndIf
+    If *Var1 & 02000000 % back collider
+        Call    GetColliderCenter ( *Var0 )
+        Add     *Var1 12` % y
+        Sub     *Var2 15` % z
+    EndIf
+    If *Var1 & 04000000 % left collider
+        Call    GetColliderCenter ( *Var0 )
+        Add     *Var0 15` % x
+        Add     *Var1 12` % y
+    EndIf
+    If *Var1 & 08000000 % front collider
+        Call    GetColliderCenter ( *Var0 )
+        Add     *Var1 12` % y
+        Add     *Var2 15` % z
+    EndIf
+    Return
+    End
+}

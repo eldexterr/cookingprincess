@@ -1,0 +1,792 @@
+#import CookingGame_Cursor.mpat
+#import CookingGame_Main.mpat
+
+#new:Header $Header
+{
+	[MainScript] $Script_Main
+	[Background] 00000000
+	[EntryList] $EntryList
+	[EntryCount] 1
+}
+
+#new:EntryList $EntryList
+{
+	~Vec4f:Entry0
+}
+
+#new:Function_Init $Function_Init
+{
+	PUSH    RA
+	LIA     A0, 800B0CF0
+	LIA     A1, "kzn_tex"
+	JAL     800654F0 % sprintf
+	RESERVED
+	CLEAR  V0
+	JPOP   RA
+}
+
+#define .NpcID:Flame1 0
+#define .NpcID:Flame2 1
+#define .NpcID:Flame3 2
+#define .NpcID:Flame4 3
+
+#new:Script_Main $Script_Main
+{
+    % Player have a save file from the original build of the game?
+    %
+    % mapIndex 0x04 was "lvl_10" in that build
+    Call	GetLoadType 	( *Var0 )
+	If	*Var0 ==  1
+        % clear progress
+        %
+        % highscores
+        Set     *Level1_Highscore_byte1 .False
+        Set     *Level1_Highscore_byte2 .False
+        Set     *Level2_Highscore_byte1 .False
+        Set     *Level2_Highscore_byte2 .False
+        Set     *Level3_Highscore_byte1 .False
+        Set     *Level3_Highscore_byte2 .False
+        Set     *Level4_Highscore_byte1 .False
+        Set     *Level4_Highscore_byte2 .False
+        Set     *Level5_Highscore_byte1 .False
+        Set     *Level5_Highscore_byte2 .False
+        % flags
+        Set     *Level1_Beaten .False
+        Set     *Level2_Beaten .False
+        Set     *Level3_Beaten .False
+        Set     *Level4_Beaten .False
+        Set     *Level5_Beaten .False
+        % story byte
+        Set     *Mod_StoryProgress .False
+        Call    GotoMap ( "lvl_10" 0 )
+        Return
+    EndIf
+    %%%
+	% Init level
+	%%%
+	%
+	% set this level timer
+	% time is formated as HHMMSSMsMs
+	Call  $WriteAddress ( $Minigame_Data 2 00050000 0 .False ) % 05:00
+	Exec  $Script_ClearMinigameData
+	Call  $WriteAddress ( 800740A2 0 1 .False .False ) % spawn as Peach
+	Call  DisablePlayerInput ( .True )
+    Call  SetCamSpeed ( .Cam:Default *Fixed[3.0] )
+    If *CameraMode == .False
+        Call    SetZoneEnabled ( 2 .False )
+    Else
+        Call    SetZoneEnabled ( 0 .False )
+        Call    SetZoneEnabled ( 1 .False )
+    EndIf
+	% generic
+	Call  FadeOutMusic  ( 00000000 000001F4 ) % stop music
+	Set   *GB_WorldLocation  .Location:MtLavalava
+	Call  SetCamPerspective  ( .Cam:Default 00000003 00000019 00000010 00001000 )
+	Call  SetCamBGColor      ( .Cam:Default 00000000 00000000 00000000 )
+	Call  SetCamEnabled      ( .Cam:Default .True )
+	Call  SetCamLeadPlayer   ( .Cam:Default .False )
+    Exec  $Script_EnterMap
+	Exec  $Script_SetupTexturePan
+    %
+    Exec    $Script_UpdateHazards
+    Call    MakeNpcs ( .False $NpcGroupList_lvl04 )
+    %
+	% Minigame scripts
+	%
+	Set   *GameState 3 % cooking game - start
+    Exec  $Script_SetupMusic
+    Exec  $Script_UpdateCursor
+    Exec  $Script_BindScripts_Special
+	Exec  $Script_InitItemEntities
+	Exec  $Script_DispatchNewOrders_Init
+	Return
+	End
+}
+
+#new:Script $Script_SetupMusic
+{
+	Loop % wait until the game starts
+		If *GameState == 4 % cooking game - step
+			BreakLoop
+		EndIf
+		Wait	1
+	EndLoop
+	Call  SetMusicTrack ( 00000000 .Song:MtLavalava 00000000 00000008 )
+	Call  ClearAmbientSounds ( 250` )
+	Return
+	End
+}
+
+% NPCs
+
+#new:NpcGroupList $NpcGroupList_lvl04
+{
+00000004 $NpcGroup_Flames 	00000000
+00000000 00000000 00000000 
+}
+
+#new:NpcGroup $NpcGroup_Flames
+{
+00000000 $NpcSettings_Decoration ~vec3f:NPC_Flame1
+00002020 $Script_InitNPC_Flame 00000000 00000000 0000010E 
+~NoDrops
+~Movement:NPC_Flame1
+~AnimationTable:NPC_Flame1
+00000000 00000000 00000000 00000000
+%
+00000001 $NpcSettings_Decoration ~vec3f:NPC_Flame1
+00002020 $Script_InitNPC_Flame 00000000 00000000 0000010E 
+~NoDrops
+~Movement:NPC_Flame1
+~AnimationTable:NPC_Flame1
+00000000 00000000 00000000 00000000
+%
+00000002 $NpcSettings_Decoration ~vec3f:NPC_Flame1
+00002020 $Script_InitNPC_Flame 00000000 00000000 0000010E 
+~NoDrops
+~Movement:NPC_Flame1
+~AnimationTable:NPC_Flame1
+00000000 00000000 00000000 00000000
+%
+00000003 $NpcSettings_Decoration ~vec3f:NPC_Flame1
+00002020 $Script_InitNPC_Flame 00000000 00000000 00000000 
+~NoDrops
+~Movement:NPC_Flame1
+~AnimationTable:NPC_Flame1
+00000000 00000000 00000000 00000000
+}
+
+#new:NpcSettings $NpcSettings_Decoration
+{
+00000000 00200025 00000000 00000000 00000000 00000000 00000000 00000000
+00000000 00000000 00630000 
+}
+
+#new:Script $Script_InitNPC_Flame
+{
+    Call    SetNpcFlagBits ( .Npc:Self 00000840 .True ) % ignore collisions
+    Return
+    End
+}
+
+#new:Script $Script_FlameFlyTo
+{
+    Set *Var7 *Var0
+    Loop
+        Call    SetNpcPos ( *Var7 ~Vec3d:NPC_Flame1 )
+        Call    SetNpcSpeed ( *Var7 *Fixed[2.0] )
+        Call    PlaySound ( 02D0 )
+        Call    GetNpcPos ( *Var7 *Var1 *Var2 *Var3 )
+        Add     *Var2 62` % y
+        Add     *Var3 19` % z
+        Call    NpcJump1 ( *Var7 *Var1 *Var2 *Var3 0 )
+        Call    GetNpcPos ( *Var7 *Var1 *Var2 *Var3 )
+        Add     *Var3 600` % z
+        Call    NpcFlyTo ( *Var7 *Var1 *Var2 *Var3 500` 3 .Easing:Linear )
+        Wait    1
+    EndLoop
+    Return
+    End
+}
+
+#new:Script $Script_UpdateFlamesHitBox
+{
+    Loop
+        Call    GetNpcPos ( .NpcID:Flame1 *Var0 *Var1 *Var2 )
+        Set     *Var4 ~Model:flame1
+        Set     *Var5 ~Collider:flame1
+        Call    TranslateModel ( *Var4 *Var0 *Var1 *Var2 )
+        Call    UpdateColliderTransform ( *Var5 )
+        %
+        Call    GetNpcPos ( .NpcID:Flame2 *Var0 *Var1 *Var2 )
+        Set     *Var4 ~Model:flame2
+        Set     *Var5 ~Collider:flame2
+        Call    TranslateModel ( *Var4 *Var0 *Var1 *Var2 )
+        Call    UpdateColliderTransform ( *Var5 )
+        %
+        Call    GetNpcPos ( .NpcID:Flame3 *Var0 *Var1 *Var2 )
+        Set     *Var4 ~Model:flame3
+        Set     *Var5 ~Collider:flame3
+        Call    TranslateModel ( *Var4 *Var0 *Var1 *Var2 )
+        Call    UpdateColliderTransform ( *Var5 )
+        %
+        Call    GetNpcPos ( .NpcID:Flame4 *Var0 *Var1 *Var2 )
+        Set     *Var4 ~Model:flame4
+        Set     *Var5 ~Collider:flame4
+        Call    TranslateModel ( *Var4 *Var0 *Var1 *Var2 )
+        Call    UpdateColliderTransform ( *Var5 )
+        Wait    1
+    EndLoop
+    Return
+    End
+}
+
+#new:Script $Script_UpdateHazards
+{
+    % Init
+    SetGroup 2
+    Call    ParentColliderToModel ( ~Collider:flame1 ~Model:flame1 )
+    Call    ParentColliderToModel ( ~Collider:flame2 ~Model:flame2 )
+    Call    ParentColliderToModel ( ~Collider:flame3 ~Model:flame3 )
+    Call    ParentColliderToModel ( ~Collider:flame4 ~Model:flame4 )
+    Call    ParentColliderToModel ( ~Collider:pUp ~Model:pUp_top )
+    Call    ParentColliderToModel ( ~Collider:pDown ~Model:pDown_top )
+    Call    EnableGroup ( ~Model:flames .False )
+    Call    TranslateGroup ( ~Model:platform_right 0 -41` 0 )
+    Call    UpdateColliderTransform ( ~Collider:pDown )
+    Bind    $Script_KillPlayer .Trigger:FloorTouch ~Collider:lava 00000001 00000000
+    Bind    $Script_KillPlayer .Trigger:FloorTouch ~Collider:flame1 00000001 00000000
+    Bind    $Script_KillPlayer .Trigger:FloorTouch ~Collider:flame2 00000001 00000000
+    Bind    $Script_KillPlayer .Trigger:FloorTouch ~Collider:flame3 00000001 00000000
+    Bind    $Script_KillPlayer .Trigger:FloorTouch ~Collider:flame4 00000001 00000000
+    Set     *Var4 .False
+    % update flames
+    Exec    $Script_InitFlames
+    % Update platforms
+    Loop
+        If *Var4 == ~Model:platform_up
+            Set     *Var4 ~Model:platform_right
+            Set     *Var5 ~Collider:pDown
+            Set     *Var6 ~Model:platform_up
+            Set     *Var7 ~Collider:pUp
+        Else
+            Set     *Var4 ~Model:platform_up
+            Set     *Var5 ~Collider:pUp
+            Set     *Var6 ~Model:platform_right
+            Set     *Var7 ~Collider:pDown
+        EndIf
+        Wait    1300`
+        Set     *Var8 2
+        % shake model for a little bit first
+        Loop 10`
+            Call     TranslateGroup ( *Var4 0 0 *Var8 )
+            Call     UpdateColliderTransform ( *Var5 )
+            Mul      *Var8 -1
+            Wait     1
+        EndLoop
+        Exec    $Script_UpdatePlatform_Down % Update platform that will go up
+        Call    PlaySound ( 0052 )
+        Call    MakeLerp    	( 0 -41` 58` .Easing:QuadraticIn )
+        Loop
+            Call     UpdateLerp
+            Call     TranslateGroup ( *Var4 0 *Var0 *Var8 )
+            Call     UpdateColliderTransform ( *Var5 )
+            Mul      *Var8 -1
+            Wait     1
+            If  *Var1  ==  .False
+                Call     TranslateGroup ( *Var4 0 -41` 0 )
+                BreakLoop
+            EndIf
+        EndLoop
+        Call    StopSound ( 0052 )
+        Wait    1
+    EndLoop
+    Return
+    End
+}
+
+#new:Script $Script_UpdatePlatform_Down
+{
+    Call    MakeLerp    	( -41` 0 58` .Easing:QuadraticIn )
+    Loop     
+        Call     UpdateLerp
+        Call     TranslateGroup ( *Var6 0 *Var0 *Var8 )
+        Call     UpdateColliderTransform ( *Var7 )
+        Mul      *Var8 -1
+        Wait     1
+        If  *Var1  ==  .False
+            Call     TranslateGroup ( *Var6 0 0 0 )
+            BreakLoop
+        EndIf
+    EndLoop
+    Return
+    End
+}
+
+% Flames
+#new:Script $Script_InitFlames
+{
+    Exec    $Script_UpdateFlamesHitBox
+    Wait    150`
+    Exec    $Script_UpdateFlame1
+    Wait    200`
+    Exec    $Script_UpdateFlame2
+    Wait    200`
+    Exec    $Script_UpdateFlame3
+    Wait    200`
+    Exec    $Script_UpdateFlame4
+    Return
+    End
+}
+
+#new:Script $Script_UpdateFlame1
+{
+    Loop
+        Set     *Var0 .NpcID:Flame1
+        ExecWait $Script_FlameFlyTo
+        Wait    1
+    EndLoop
+    Return
+    End
+}
+
+#new:Script $Script_UpdateFlame2
+{
+    Loop
+        Set     *Var0 .NpcID:Flame2
+        ExecWait $Script_FlameFlyTo
+        Wait    1
+    EndLoop
+    Return
+    End
+}
+
+#new:Script $Script_UpdateFlame3
+{
+    Loop
+        Set     *Var0 .NpcID:Flame3
+        ExecWait $Script_FlameFlyTo
+        Wait    1
+    EndLoop
+    Return
+    End
+}
+
+#new:Script $Script_UpdateFlame4
+{
+    Loop
+        Set     *Var0 .NpcID:Flame4
+        ExecWait $Script_FlameFlyTo
+        Wait    1
+    EndLoop
+    Return
+    End
+}
+
+% Cooking game
+
+#new:Script $Script_BindScripts_Special {
+	% Delivery Point
+	Bind     $Script_DeliveryPoint .Trigger:WallPressA ~Collider:delivery1 00000001 00000000
+	Bind     $Script_DeliveryPoint .Trigger:WallPressA ~Collider:delivery2 00000001 00000000
+    Bind     $Script_DeliveryPoint .Trigger:WallPressA ~Collider:delivery3 00000001 00000000
+    Bind     $Script_DeliveryPoint .Trigger:WallPressA ~Collider:delivery4 00000001 00000000
+    Bind     $Script_DeliveryPoint .Trigger:WallPressA ~Collider:delivery5 00000001 00000000
+	% Mix Points
+	Bind     $Script_MixPoint .Trigger:WallPressA ~Collider:mixer1 00000001 00000000
+    Bind     $Script_MixPoint .Trigger:WallPressA ~Collider:mixer2 00000001 00000000
+	% Trash bin
+	Bind     $Script_TrashBin .Trigger:WallPressA ~Collider:trash1 00000001 00000000
+    Bind     $Script_TrashBin .Trigger:WallPressA ~Collider:trash2 00000001 00000000
+    Bind     $Script_TrashBin .Trigger:WallPressA ~Collider:trash3 00000001 00000000
+	% Stove
+	Bind     $Script_Stove_1 .Trigger:WallPressA ~Collider:stove1 00000001 00000000
+    Bind     $Script_Stove_2 .Trigger:WallPressA ~Collider:stove2 00000001 00000000
+	% Cutting table
+	Bind     $Script_Cutting .Trigger:WallPressA ~Collider:cutting1 00000001 00000000
+    Bind     $Script_Cutting .Trigger:WallPressA ~Collider:cutting2 00000001 00000000
+    Bind     $Script_Cutting .Trigger:WallPressA ~Collider:cutting3 00000001 00000000
+	% Dispatchers
+    Bind     $Script_Dispatcher_CakeMix .Trigger:WallPressA ~Collider:disp_flour1 00000001 00000000
+    Bind     $Script_Dispatcher_CakeMix .Trigger:WallPressA ~Collider:disp_flour2 00000001 00000000
+    Bind     $Script_Dispatcher_Egg .Trigger:WallPressA ~Collider:disp_egg1 00000001 00000000
+    Bind     $Script_Dispatcher_Egg .Trigger:WallPressA ~Collider:disp_egg2 00000001 00000000
+    Bind     $Script_Dispatcher_Sugar .Trigger:WallPressA ~Collider:disp_sugar1 00000001 00000000
+    Bind     $Script_Dispatcher_Sugar .Trigger:WallPressA ~Collider:disp_sugar2 00000001 00000000
+    Bind     $Script_Dispatcher_Cream .Trigger:WallPressA ~Collider:disp_cream1 00000001 00000000
+    Bind     $Script_Dispatcher_Cream .Trigger:WallPressA ~Collider:disp_cream2 00000001 00000000
+    Bind     $Script_Dispatcher_Strawberry .Trigger:WallPressA ~Collider:disp_strawberry1 00000001 00000000
+    Bind     $Script_Dispatcher_Strawberry .Trigger:WallPressA ~Collider:disp_strawberry2 00000001 00000000
+    Bind     $Script_Dispatcher_Strawberry .Trigger:WallPressA ~Collider:disp_strawberry3 00000001 00000000
+    Return
+    End
+}
+
+#new:Script $Script_InitItemEntities {
+	% Init Mix Bowls
+	Set	    *Var0 	~Collider:itemPos_Bowl1
+	ExecWait $Script_GetItemPosForCollider
+	Set		*Var3 .Item:CakeBowl
+	Call	DropItemEntity ( *Var3 *Var0 *Var1 *Var2 .ItemSpawnMode:Decoration .False )
+	Call 	$AddItemData ( .ItemType:Bowl *Var0 *Var3 )
+	%
+	Set	    *Var0 	~Collider:itemPos_Bowl2
+	ExecWait $Script_GetItemPosForCollider
+	Set		*Var3 .Item:CakeBowl
+	Call	DropItemEntity ( *Var3 *Var0 *Var1 *Var2 .ItemSpawnMode:Decoration .False )
+	Call 	$AddItemData ( .ItemType:Bowl *Var0 *Var3 )
+	%
+	% Init Molds
+	%
+	Set	    *Var0 	~Collider:itemPos_Mold1
+	ExecWait $Script_GetItemPosForCollider
+	Set		*Var3 .Item:CakePan
+	Call	DropItemEntity ( *Var3 *Var0 *Var1 *Var2 .ItemSpawnMode:Decoration .False )
+	Call 	$AddItemData ( .ItemType:Mold *Var0 *Var3 )
+	%
+	Set	    *Var0 	~Collider:itemPos_Mold2
+	ExecWait $Script_GetItemPosForCollider
+	Set		*Var3 .Item:CakePan
+	Call	DropItemEntity ( *Var3 *Var0 *Var1 *Var2 .ItemSpawnMode:Decoration .False )
+	Call 	$AddItemData ( .ItemType:Mold *Var0 *Var3 )
+	Return
+	End
+}
+
+#new:Script $Script_Stove_1 {
+	SetConst *VarA *MapVar[0] % stove's bool
+	SetConst *VarB *MapVar[1] % stove's itemIndex
+    Set *MapVar[2] ~Model:stove1  % stove's model groupID
+    SetConst *VarC *MapVar[2]
+	Exec $Script_Stove
+	Return
+	End
+}
+
+#new:Script $Script_Stove_2 {
+	SetConst *VarA *MapVar[3] % stove's bool
+	SetConst *VarB *MapVar[4] % stove's itemIndex
+    Set *MapVar[5] ~Model:stove2  % stove's model groupID
+    SetConst *VarC *MapVar[5]
+	Exec $Script_Stove
+	Return
+	End
+}
+
+% Possible orders for this level
+#new:Unknown $OrdersTable_lvl04
+{
+	.Item:CakeCream1Straw1 .Item:CakeCream1Straw1 .Item:CakeCream1Straw1 .Item:CakeCream1
+}
+
+#new:Script $Script_DispatchNewOrders_Init
+{
+	Set		*Var4 $OrdersTable_lvl04
+	Set		*Var5 4
+	Exec	$Script_DispatchNewOrders
+	Return
+	End
+}
+
+%
+
+#new:Script $Script_EnterMap
+{
+	Return
+	End
+}
+
+#new:Script $Script_CreateExitTriggers
+{
+	Return
+	End
+}
+
+% Panners
+
+#new:Script $Script_SetupTexturePan
+{
+	Call     802C9000 	( ~Model:band 0 )
+	Call     802C9000 	( ~Model:lava 1 )
+	Call     802C9000 	( ~Model:kem2 2 )
+	Thread
+		Set  *Var[0] 0
+		Set  *Var[1] 0
+		Set  *Var[2] FFFFFE92
+		Set  *Var[3] 0
+		Set  *Var[4] 0
+		Set  *Var[5] 0
+		Set  *Var[6] 0
+		Set  *Var[7] 0
+		Set  *Var[8] 0
+		Set  *Var[9] 0
+		Set  *Var[A] 0
+		Set  *Var[B] 0
+		Set  *Var[C] 0
+		Exec $Script_TexturePan_Update
+	EndThread
+	Thread
+		Set  *Var[0] 1
+		Set  *Var[1] FFFFFE70
+		Set  *Var[2] 0
+		Set  *Var[3] 320
+		Set  *Var[4] 0
+		Set  *Var[5] 1
+		Set  *Var[6] 0
+		Set  *Var[7] 1
+		Set  *Var[8] 0
+		Set  *Var[9] 0
+		Set  *Var[A] 0
+		Set  *Var[B] 0
+		Set  *Var[C] 0
+		Exec $Script_TexturePan_Update
+	EndThread
+	Thread
+		Set  *Var[0] 2
+		Set  *Var[1] 1F4
+		Set  *Var[2] 0
+		Set  *Var[3] FFFFFE70
+		Set  *Var[4] 0
+		Set  *Var[5] 1
+		Set  *Var[6] 0
+		Set  *Var[7] 0
+		Set  *Var[8] 1
+		Set  *Var[9] 0
+		Set  *Var[A] 0
+		Set  *Var[B] 0
+		Set  *Var[C] 0
+		Exec $Script_TexturePan_Update
+	EndThread
+	Return
+	End
+}
+
+#new:Script $Script_TexturePan_Update
+{
+    SetGroup  00000000
+    If  *Var[5]  ==  00000001
+        If  *Var[6]  ==  00000001
+            If  *Var[7]  ==  00000001
+                If  *Var[8]  ==  00000001
+                    Call  $Function_TexturePan_Simple ( )
+                    Return
+                EndIf
+            EndIf
+        EndIf
+    EndIf
+    Call  $Function_TexturePan_Complex ( )
+    Return
+    End
+}
+
+#new:Function $Function_TexturePan_Simple
+{
+    ADDIU       SP, SP, FFE8
+    SW          S0, 10 (SP)
+    COPY        S0, A0
+    SW          RA, 14 (SP)
+    LW          V1, A8 (S0)
+    LW          V0, 88 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o30
+    SW          V1, A8 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .o40
+    ADDU        V0, V1, V0
+    .o30
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .o44
+    SUBU        V0, V1, A0
+    .o40
+    SW          V0, A8 (S0)
+    .o44
+    LW          V1, AC (S0)
+    LW          V0, 8C (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o64
+    SW          V1, AC (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .o74
+    ADDU        V0, V1, V0
+    .o64
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .o78
+    SUBU        V0, V1, A0
+    .o74
+    SW          V0, AC (S0)
+    .o78
+    LW          V1, B0 (S0)
+    LW          V0, 90 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o98
+    SW          V1, B0 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .oA8
+    ADDU        V0, V1, V0
+    .o98
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .oAC
+    SUBU        V0, V1, A0
+    .oA8
+    SW          V0, B0 (S0)
+    .oAC
+    LW          V1, B4 (S0)
+    LW          V0, 94 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .oCC
+    SW          V1, B4 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .oDC
+    ADDU        V0, V1, V0
+    .oCC
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .oE0
+    SUBU        V0, V1, A0
+    .oDC
+    SW          V0, B4 (S0)
+    .oE0
+    LW          A0, 84 (S0)
+    JAL         8011BC1C
+    LW          A1, A8 (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC34
+    LW          A1, AC (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC4C
+    LW          A1, B0 (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC64
+    LW          A1, B4 (S0)
+    LW          RA, 14 (SP)
+    LW          S0, 10 (SP)
+    CLEAR       V0
+    JR          RA
+    ADDIU       SP, SP, 18
+}
+
+#new:Function $Function_TexturePan_Complex
+{
+    ADDIU       SP, SP, FFE8
+    SW          S0, 10 (SP)
+    COPY        S0, A0
+    BEQ         A1, R0, .o24
+    SW          RA, 14 (SP)
+    SW          R0, 70 (S0)
+    SW          R0, 74 (S0)
+    SW          R0, 78 (S0)
+    SW          R0, 7C (S0)
+    .o24
+    LW          V0, 70 (S0)
+    BNE         V0, R0, .o64
+    NOP
+    LW          V1, A8 (S0)
+    LW          V0, 88 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o50
+    SW          V1, A8 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .o60
+    ADDU        V0, V1, V0
+    .o50
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .o64
+    SUBU        V0, V1, A0
+    .o60
+    SW          V0, A8 (S0)
+    .o64
+    LW          V0, 74 (S0)
+    BNE         V0, R0, .oA4
+    NOP
+    LW          V1, AC (S0)
+    LW          V0, 8C (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o90
+    SW          V1, AC (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .oA0
+    ADDU        V0, V1, V0
+    .o90
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .oA4
+    SUBU        V0, V1, A0
+    .oA0
+    SW          V0, AC (S0)
+    .oA4
+    LW          V0, 78 (S0)
+    BNE         V0, R0, .oE4
+    NOP
+    LW          V1, B0 (S0)
+    LW          V0, 90 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .oD0
+    SW          V1, B0 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .oE0
+    ADDU        V0, V1, V0
+    .oD0
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .oE4
+    SUBU        V0, V1, A0
+    .oE0
+    SW          V0, B0 (S0)
+    .oE4
+    LW          V0, 7C (S0)
+    BNE         V0, R0, .o124
+    NOP
+    LW          V1, B4 (S0)
+    LW          V0, 94 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o110
+    SW          V1, B4 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .o120
+    ADDU        V0, V1, V0
+    .o110
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .o124
+    SUBU        V0, V1, A0
+    .o120
+    SW          V0, B4 (S0)
+    .o124
+    LW          A0, 84 (S0)
+    JAL         8011BC1C
+    LW          A1, A8 (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC34
+    LW          A1, AC (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC4C
+    LW          A1, B0 (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC64
+    LW          A1, B4 (S0)
+    LW          V0, 70 (S0)
+    LW          V1, 78 (S0)
+    LW          A0, 98 (S0)
+    ADDIU       V0, V0, 1
+    SW          V0, 70 (S0)
+    LW          V0, 74 (S0)
+    ADDIU       V1, V1, 1
+    SW          V1, 78 (S0)
+    LW          V1, 70 (S0)
+    ADDIU       V0, V0, 1
+    SW          V0, 74 (S0)
+    LW          V0, 7C (S0)
+    SLT         V1, V1, A0
+    ADDIU       V0, V0, 1
+    BNE         V1, R0, .o198
+    SW          V0, 7C (S0)
+    SW          R0, 70 (S0)
+    .o198
+    LW          V0, 74 (S0)
+    LW          V1, 9C (S0)
+    SLT         V0, V0, V1
+    BEQL        V0, R0, .o1AC
+    SW          R0, 74 (S0)
+    .o1AC
+    LW          V0, 78 (S0)
+    LW          V1, A0 (S0)
+    SLT         V0, V0, V1
+    BEQL        V0, R0, .o1C0
+    SW          R0, 78 (S0)
+    .o1C0
+    LW          V0, 7C (S0)
+    LW          V1, A4 (S0)
+    SLT         V0, V0, V1
+    BEQL        V0, R0, .o1D4
+    SW          R0, 7C (S0)
+    .o1D4
+    LW          RA, 14 (SP)
+    LW          S0, 10 (SP)
+    CLEAR       V0
+    JR          RA
+    ADDIU       SP, SP, 18
+}

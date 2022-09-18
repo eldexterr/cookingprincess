@@ -1,0 +1,400 @@
+% Init all recipes icons, this file also has the recipes table.
+
+% Create all the ingredients icons after loading the last icon for the stats menu
+@Hook 81134 % 800E7C84 % Overworld
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S0
+    JAL     $GetItemHudScript_byItemID
+    ORI     A0, R0, 00AA % .Item:CakeMix
+    JAL     $CreateIcon
+    COPY    A0, V0
+    ORI     A0, R0, 00AA % .Item:CakeMix
+    JAL     $IconTable_SaveIndex_byItemID
+    COPY    A1, S0 % iconIndex
+    %
+    JAL     $GetItemHudScript_byItemID
+    ORI     A0, R0, 005D % .Item:BakingSugar
+    JAL     $CreateIcon
+    COPY    A0, V0
+    ORI     A0, R0, 005D % .Item:BakingSugar
+    JAL     $IconTable_SaveIndex_byItemID
+    COPY    A1, S0 % iconIndex
+    %
+    JAL     $GetItemHudScript_byItemID
+    ORI     A0, R0, 005F % .Item:BakingEgg
+    JAL     $CreateIcon
+    COPY    A0, V0
+    ORI     A0, R0, 005F % .Item:BakingEgg
+    JAL     $IconTable_SaveIndex_byItemID
+    COPY    A1, S0 % iconIndex
+    %
+    JAL     $GetItemHudScript_byItemID
+    ORI     A0, R0, 0060 % .Item:BakingCream
+    JAL     $CreateIcon
+    COPY    A0, V0
+    ORI     A0, R0, 0060 % .Item:BakingCream
+    JAL     $IconTable_SaveIndex_byItemID
+    COPY    A1, S0 % iconIndex
+    %
+    JAL     $GetItemHudScript_byItemID
+    ORI     A0, R0, 0061 % .Item:BakingStrawberry
+    JAL     $CreateIcon
+    COPY    A0, V0
+    ORI     A0, R0, 0061 % .Item:BakingStrawberry
+    JAL     $IconTable_SaveIndex_byItemID
+    COPY    A1, S0 % iconIndex
+    %
+    JAL     $GetItemHudScript_byItemID
+    ORI     A0, R0, 009E % .Item:BlueBerry
+    JAL     $CreateIcon
+    COPY    A0, V0
+    ORI     A0, R0, 009E % .Item:BlueBerry
+    JAL     $IconTable_SaveIndex_byItemID
+    COPY    A1, S0 % iconIndex
+    %
+    JAL     $GetItemHudScript_byItemID
+    ORI     A0, R0, 00A1 % .Item:BubbleBerry
+    JAL     $CreateIcon
+    COPY    A0, V0
+    ORI     A0, R0, 00A1 % .Item:BubbleBerry
+    JAL     $IconTable_SaveIndex_byItemID
+    COPY    A1, S0 % iconIndex
+    %
+    JAL     $GetItemHudScript_byItemID
+    ORI     A0, R0, 015F % .Item:CakeBare
+    JAL     $CreateIcon
+    COPY    A0, V0
+    ORI     A0, R0, 015F % .Item:CakeBare
+    JAL     $IconTable_SaveIndex_byItemID
+    COPY    A1, S0 % iconIndex
+    %
+    JAL     $GetItemHudScript_byItemID
+    ORI     A0, R0, .Item:Clock % 7
+    JAL     $CreateIcon
+    COPY    A0, V0
+    ORI     A0, R0, .Item:Clock % 7
+    JAL     $IconTable_SaveIndex_byItemID
+    COPY    A1, S0 % iconIndex
+    %
+    POP     RA, A0, A1, A2, A3, V0, V1, S0
+    PUSH    RA
+    % restore vanilla code
+    JAL	    800F0D5C
+    NOP
+    POP     RA
+    J       800E7C8C
+    NOP
+}%/
+
+%========
+% New data
+%========
+
+#export:Data $Data_IconsIndexesTable
+{
+    .Item:CakeMix           00000000 % 0x00 % 0 % iconID iconIndex % cakeMix
+    .Item:BakingSugar       00000000 % 0x08 % 1 % sugar
+    .Item:BakingEgg         00000000 % 0x10 % 2 % egg
+    .Item:BakingCream       00000000 % 0x18 % 3 % cream
+    .Item:BakingStrawberry  00000000 % 0x20 % 4 % strawberry
+    .Item:BlueBerry         00000000 % 0x28 % 5 % blueberry
+    .Item:BubbleBerry       00000000 % 0x30 % 6 % bubbleberry
+    %
+    FFFFFFFF                00000000 % 0x38 % 7 % order1
+    FFFFFFFF                00000000 % 0x40 % 8 % order2
+    FFFFFFFF                00000000 % 0x48 % 9 % order3
+    FFFFFFFF                00000000 % 0x50 % A % order4
+    %
+    .Item:CakeBare          00000000 % 0x58 % B % miscIcon1
+    .Item:Clock             00000000 % 0x58 % C % miscIcon2
+    %
+    FFFFFFFF                FFFFFFFF % end
+}
+
+% You can combine all ingredients but this ones are the only items the diners will ask.
+#export:Data $RecipesTable
+{
+    %       recipe        %           ingredient1         ingredient2            ingredient3
+    .Item:CakeCream1Straw1        .Item:BakingCream      .Item:BakingStrawberry .False
+    .Item:CakeCream1Straw2        .Item:BakingCream      .Item:BakingStrawberry .Item:BakingStrawberry
+    .Item:CakeCream1              .Item:BakingCream      .False                 .False
+    .Item:CakeCream2              .Item:BakingCream      .Item:BakingCream      .False
+    .Item:CakeCream1Blue1         .Item:BakingCream      .Item:BlueBerry        .False
+    .Item:CakeCream1Straw1Blue1   .Item:BakingCream      .Item:BakingStrawberry .Item:BlueBerry
+    .Item:CakeCream1Bubble1       .Item:BakingCream      .Item:BubbleBerry      .False
+    .Item:CakeCream1Bubble2       .Item:BakingCream      .Item:BubbleBerry      .Item:BubbleBerry
+    .Item:CakeCream1Straw1Bubble1 .Item:BakingCream      .Item:BakingStrawberry .Item:BubbleBerry
+    .Item:CakeStraw1Blue1Bubble1  .Item:BakingStrawberry .Item:BlueBerry        .Item:BubbleBerry
+    FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF % end
+}
+
+%========
+% New functions
+%========
+
+% A0=recipe's itemID
+%
+% Get a recipe's subItems' itemIDs
+%
+% save IDs in sp10/14/18
+#export:Function $GetRecipe_subItemsIDs
+{
+    PUSH    R0, R0, R0, A0, A1, A2, A3, V0, V1
+    LIO     A1, $RecipesTable
+    .Loop
+    LW      A2, 0 (A1) % loadItemID
+    BEQ     A0, A2, .ItemFound
+    NOP
+    BLTZ    A2, .End % item not found
+    NOP
+    BEQ     R0, R0, .Loop
+    ADDI    A1, A1, 10 % read next recipe
+    .ItemFound
+    LW      A2, 4 (A1) % subItem1_ID
+    ADDIU   A3, SP, 38 % push size+8
+    SW      A2, 10 (A3)
+    LW      A2, 8 (A1) % subItem2_ID
+    SW      A2, 14 (A3)
+    LW      A2, C (A1) % subItem3_ID
+    SW      A2, 18 (A3)
+    .End
+    POP     R0, R0, R0, A0, A1, A2, A3, V0, V1
+    JR      RA
+    NOP
+}
+
+% A0 = itemID
+%
+% A1 = iconIndex
+%
+% Save an iconIndex in one entry in specific by reading an itemID.
+#new:Function $IconTable_SaveIndex_byItemID
+{
+    PUSH    A0, A1, A2, A3, V0, V1
+    COPY    V0, A0
+    COPY    V1, A1
+    LIO     A0, $Data_IconsIndexesTable
+    .Loop
+    LW      A1, 0 (A0)
+    BEQL    V0, A1, .End
+    SW      V1, 4 (A0) % item found
+    % last entry in the table?
+    LW      A1, 4 (A0)
+    BLTZ    A1, .End
+    NOP % item not found
+    BEQ     R0, R0, .Loop
+    ADDIU   A0, A0, 8 % read next item
+    .End
+    POP     A0, A1, A2, A3, V0, V1
+    JR      RA
+    NOP
+}
+
+% A0 = itemID
+%
+% Get an iconIndex from $Data_IconsIndexesTable by reading an itemID.
+%
+% Returns a zero if nothing was found.
+#export:Function $IconTable_GetIndex_byItemID
+{
+    PUSH    A0, A1, A2, A3, V1
+    COPY    V0, A0
+    LIO     A0, $Data_IconsIndexesTable
+    .Loop
+    LW      A1, 0 (A0)
+    BEQL    V0, A1, .End
+    LW      V0, 4 (A0) % item found
+    % last entry in the table?
+    LW      A1, 4 (A0)
+    BLTZL   A1, .End
+    CLEAR   V0 % item not found
+    BEQ     R0, R0, .Loop
+    ADDIU   A0, A0, 8 % read next item
+    .End
+    POP     A0, A1, A2, A3, V1
+    JR      RA
+    NOP
+}
+
+% A0 = index (from $Data_IconsIndexesTable)
+%
+% A1 = iconIndex
+%
+% Save an iconIndex in one entry in specific by reading a table's entry index.
+#export:Function $IconTable_SaveIndex_byIndex
+{
+    PUSH    A0, A1, A2, A3, V0, V1
+    COPY    V0, A0
+    COPY    V1, A1
+    LIO     A0, $Data_IconsIndexesTable
+    CLEAR   A2
+    .Loop
+    LW      A1, 0 (A0)
+    BEQL    V0, A2, .End
+    SW      V1, 4 (A0) % item found
+    % last entry in the table?
+    LW      A1, 4 (A0)
+    BLTZ    A1, .End
+    NOP % item not found
+    ADDIU   A2, A2, 1 % next slot
+    BEQ     R0, R0, .Loop
+    ADDIU   A0, A0, 8 % read next item
+    .End
+    POP     A0, A1, A2, A3, V0, V1
+    JR      RA
+    NOP
+}
+
+% A0 = index (from $Data_IconsIndexesTable)
+%
+% Get an iconIndex in one entry in specific by reading a table's entry index.
+#export:Function $IconTable_GetIndex_byIndex
+{
+    PUSH    A0, A1, A2, A3, V1
+    COPY    V0, A0
+    LIO     A0, $Data_IconsIndexesTable
+    CLEAR   A2
+    .Loop
+    LW      A1, 0 (A0)
+    BEQL    V0, A2, .End
+    LW      V0, 4 (A0) % item found
+    % last entry in the table?
+    LW      A1, 4 (A0)
+    BLTZL   A1, .End
+    CLEAR   V0 % item not found
+    ADDIU   A2, A2, 1 % next slot
+    BEQ     R0, R0, .Loop
+    ADDIU   A0, A0, 8 % read next item
+    .End
+    POP     A0, A1, A2, A3, V1
+    JR      RA
+    NOP
+}
+
+% A0 = orderData*
+%
+% Get an order's data Index from $Data_IconsIndexesTable.
+#export:Function $GetOrderIconTableIndex
+{
+    PUSH    A0, A1, A2, A3, V1
+    % get order being readen right now
+    LIO     A1, $Order1_Data
+    BEQL    A0, A1, .End
+    ORI     V0, R0, 7 % order1 % item tableIndex
+    LIO     A1, $Order2_Data
+    BEQL    A0, A1, .End
+    ORI     V0, R0, 8 % order2
+    LIO     A1, $Order3_Data
+    BEQL    A0, A1, .End
+    ORI     V0, R0, 9 % order3
+    ORI     V0, R0, A % order4
+    .End
+    POP     A0, A1, A2, A3, V1
+    JR      RA
+    NOP
+}
+
+% A0 = orderData*
+#export:Function $RemoveOrderIcon
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1
+    JAL     $GetOrderIconTableIndex
+    NOP
+    JAL     $IconTable_GetIndex_byIndex
+    COPY    A0, V0
+    JAL     ~Func:free_hud_element
+    COPY    A0, V0
+    POP     RA, A0, A1, A2, A3, V0, V1
+    JR      RA
+    NOP
+}
+
+% A0 = itemID
+%
+% Get any item hudElementScript/iconScript by reading their itemID.
+%
+% _Code ported from `~func:setup_item_popup` % `800E6C44`_
+#export:Function $GetItemHudScript_byItemID
+{
+    PUSH    RA, A0, A1, A2, A3, V1, T3, T2, T1
+    LIO     T3, 800878E0 % ItemTable*
+    LIO     T2, $Global_ItemHudScripts
+    ADDIU	T1, R0, 1
+    COPY    V0, A0
+    SLL	    V0, V0, 5
+    ADDU	A1, V0, T3
+    LH	    V0, 0004 (A1)
+    %LHU	    V1, 0018 (A1)
+    SLL	    V0, V0, 3
+    %-?-----------%
+    %ANDI	V1, V1, 0001
+    %BEQZ	V1, .800E6CA4
+    ADDU	V0, V0, T2
+    LW	    V0, 0000 (V0) % load iconScript
+    /%SW	    A2, 0108 (A0)
+    BEQ     R0, R0, .800E6CB0
+    SW	    T1, 018C (A0)
+    .800E6CA4
+    LW	    V0, 0004 (V0)
+    SW	    A2, 0108 (A0)
+    SW	    R0, 018C (A0)
+    .800E6CB0
+    SW	    V0, 0000 (A0)
+    LW	    V0, 0000 (A1)
+    SW	    V0, 0084 (A0)
+    LW	    V0, 0014 (A1)
+    ADDIU	T0, T0, 0001
+    SW	    V0, 0294 (A0)
+    ADDIU	A0, A0, 0004
+    ADDIU	A2, A2, 0001%/
+    POP     RA, A0, A1, A2, A3, V1, T3, T2, T1
+    JR      RA
+    NOP
+}
+
+% A0 = iconScript
+%
+% returns iconIndex in s0
+#export:Function $CreateIcon
+{
+    PUSH    RA, A0, A1, A2, A3, V0
+    JAL     ~Func:create_hud_element
+    NOP
+    COPY    S0, V0 % save iconIndex in S0
+    ADDIU	A1, R0, 0080
+    JAL	    ~Func:set_hud_element_flags
+    COPY    A0, S0 % load iconIndex
+    ADDIU	A1, R0, 8000
+    JAL	    ~Func:clear_hud_element_flags
+    COPY    A0, S0 % load iconIndex
+    POP     RA, A0, A1, A2, A3, V0
+    JR      RA
+    NOP
+}
+
+% A0 = iconScript
+%
+% Make icon to be always on top
+%
+% Returns index in S0
+#export:Function $CreateIcon_ignoreViewport
+{
+    PUSH    RA, A0, A1, A2, A3, V0
+    JAL     ~Func:create_hud_element
+    NOP
+    COPY    S0, V0 % save iconIndex in S0
+    ADDIU	A1, R0, 0040
+    JAL	    ~Func:set_hud_element_flags
+    COPY    A0, S0 % load iconIndex
+    % hide icon
+    ADDI    A1, R0, -100` % x
+    CLEAR   A2 % y
+    JAL     ~Func:set_hud_element_render_pos
+    COPY    A0, S0
+    ADDIU	A1, R0, 8000
+    JAL	    ~Func:clear_hud_element_flags
+    COPY    A0, S0 % load iconIndex
+    POP     RA, A0, A1, A2, A3, V0
+    JR      RA
+    NOP
+}

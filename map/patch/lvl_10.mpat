@@ -1,0 +1,803 @@
+#new:Header $Header
+{
+	[MainScript] $Script_Main
+	[Background] 80200000
+	[EntryList] $EntryList
+	[EntryCount] 2
+}
+
+#new:EntryList $EntryList
+{
+	~Vec4f:Entry0
+	~Vec4f:Entry1
+}
+
+#new:Script_Main $Script_Main
+{
+	Set   *GB_WorldLocation  .Location:PeachsCastle
+	Call  SetCamPerspective  ( .Cam:Default 00000003 00000019 00000010 00001000 )
+	Call  SetCamBGColor      ( .Cam:Default 00000000 00000000 00000000 )
+	Call  SetCamEnabled      ( .Cam:Default .True )
+	Call  SetCamLeadPlayer   ( .Cam:Default .False )
+    % Spawn as peach
+    Call  $ReadAddress  ( 800740A2 0 *Var0 .False .False ) % Peach byte
+    If *Var0 != 1
+        Call  $WriteAddress ( 800740A2 0 1 .False .False ) % spawn as Peach
+        Call  GotoMap ( "lvl_10" 0 ) % reload map
+        Wait  100`
+        Return
+    EndIf%/
+    Exec  $Script_ClearMinigameData
+	Exec  $Script_SetupMusic
+	Exec  $Script_SetupTexturePan
+	Exec  $Script_EnterMap
+    % Hide models
+    If *Level1_Beaten == .False
+        Call    EnableGroup ( ~Model:L1 .False )
+    EndIf
+    If *Level2_Beaten == .False
+        Call    EnableGroup ( ~Model:L2 .False )
+    EndIf
+    If *Level3_Beaten == .False
+        Call    EnableGroup ( ~Model:L3 .False )
+    EndIf
+    If *Level4_Beaten == .False
+        Call    EnableGroup ( ~Model:L4 .False )
+    EndIf
+    If *Level5_Beaten == .False
+        Call    EnableGroup ( ~Model:L5 .False )
+    EndIf
+    Set     *PauseGame .False
+    Set     *GameState 1 % TitleScreen
+    % save the game if player got back to the main menu
+    Call    GetLoadType 	( *Var0 )
+	If	*Var0 !=  1
+        Call  $RunFunction ( $SaveGame )
+    EndIf
+    Call  DisablePlayerInput ( .True )
+    Exec  $Script_SetRandomAnimation
+	Return
+	End
+}
+
+#new:Function_Init $Function_Init
+{
+	PUSH    RA
+	LIA     A0, 800B0CF0
+	LIA     A1, "kkj_tex"
+	JAL     800654F0 % sprintf
+	RESERVED
+	CLEAR  V0
+	JPOP   RA
+}
+
+#new:Script $Script_SetupMusic
+{
+	Call  SetMusicTrack ( 00000000 .Song:PeachMission 00000000 00000008 )
+	Call  ClearAmbientSounds ( 250` )
+	Return
+	End
+}
+
+#new:Script $Script_SetupTexturePan
+{
+	Call     SetTexPanner 	( ~Model:o154 0 )
+	Call     SetTexPanner 	( ~Model:o42 5 )
+	Call     SetTexPanner 	( ~Model:o157 A )
+	Thread
+		Set  *Var[0] 0
+		Set  *Var[1] 0
+		Set  *Var[2] 0
+		Set  *Var[3] 28
+		Set  *Var[4] 384
+		Set  *Var[5] 1
+		Set  *Var[6] 1
+		Set  *Var[7] 1
+		Set  *Var[8] 1
+		Set  *Var[9] 0
+		Set  *Var[A] 0
+		Set  *Var[B] 0
+		Set  *Var[C] 0
+		Exec $Script_TexturePan_Update
+	EndThread
+	Thread
+		Set  *Var[0] 5
+		Set  *Var[1] FFFFFFAA
+		Set  *Var[2] 0
+		Set  *Var[3] 0
+		Set  *Var[4] 0
+		Set  *Var[5] 0
+		Set  *Var[6] 0
+		Set  *Var[7] 0
+		Set  *Var[8] 0
+		Set  *Var[9] 0
+		Set  *Var[A] 0
+		Set  *Var[B] 0
+		Set  *Var[C] 0
+		Exec $Script_TexturePan_Update
+	EndThread
+	Return
+	End
+}
+
+#new:Script $Script_TexturePan_Update
+{
+    SetGroup  00000000
+    If  *Var[5]  ==  00000001
+        If  *Var[6]  ==  00000001
+            If  *Var[7]  ==  00000001
+                If  *Var[8]  ==  00000001
+                    Call  $Function_TexturePan_Simple ( )
+                    Return
+                EndIf
+            EndIf
+        EndIf
+    EndIf
+    Call  $Function_TexturePan_Complex ( )
+    Return
+    End
+}
+
+#new:Function $Function_TexturePan_Simple
+{
+    ADDIU       SP, SP, FFE8
+    SW          S0, 10 (SP)
+    COPY        S0, A0
+    SW          RA, 14 (SP)
+    LW          V1, A8 (S0)
+    LW          V0, 88 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o30
+    SW          V1, A8 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .o40
+    ADDU        V0, V1, V0
+    .o30
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .o44
+    SUBU        V0, V1, A0
+    .o40
+    SW          V0, A8 (S0)
+    .o44
+    LW          V1, AC (S0)
+    LW          V0, 8C (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o64
+    SW          V1, AC (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .o74
+    ADDU        V0, V1, V0
+    .o64
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .o78
+    SUBU        V0, V1, A0
+    .o74
+    SW          V0, AC (S0)
+    .o78
+    LW          V1, B0 (S0)
+    LW          V0, 90 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o98
+    SW          V1, B0 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .oA8
+    ADDU        V0, V1, V0
+    .o98
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .oAC
+    SUBU        V0, V1, A0
+    .oA8
+    SW          V0, B0 (S0)
+    .oAC
+    LW          V1, B4 (S0)
+    LW          V0, 94 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .oCC
+    SW          V1, B4 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .oDC
+    ADDU        V0, V1, V0
+    .oCC
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .oE0
+    SUBU        V0, V1, A0
+    .oDC
+    SW          V0, B4 (S0)
+    .oE0
+    LW          A0, 84 (S0)
+    JAL         8011BC1C
+    LW          A1, A8 (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC34
+    LW          A1, AC (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC4C
+    LW          A1, B0 (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC64
+    LW          A1, B4 (S0)
+    LW          RA, 14 (SP)
+    LW          S0, 10 (SP)
+    CLEAR       V0
+    JR          RA
+    ADDIU       SP, SP, 18
+}
+
+#new:Function $Function_TexturePan_Complex
+{
+    ADDIU       SP, SP, FFE8
+    SW          S0, 10 (SP)
+    COPY        S0, A0
+    BEQ         A1, R0, .o24
+    SW          RA, 14 (SP)
+    SW          R0, 70 (S0)
+    SW          R0, 74 (S0)
+    SW          R0, 78 (S0)
+    SW          R0, 7C (S0)
+    .o24
+    LW          V0, 70 (S0)
+    BNE         V0, R0, .o64
+    NOP
+    LW          V1, A8 (S0)
+    LW          V0, 88 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o50
+    SW          V1, A8 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .o60
+    ADDU        V0, V1, V0
+    .o50
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .o64
+    SUBU        V0, V1, A0
+    .o60
+    SW          V0, A8 (S0)
+    .o64
+    LW          V0, 74 (S0)
+    BNE         V0, R0, .oA4
+    NOP
+    LW          V1, AC (S0)
+    LW          V0, 8C (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o90
+    SW          V1, AC (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .oA0
+    ADDU        V0, V1, V0
+    .o90
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .oA4
+    SUBU        V0, V1, A0
+    .oA0
+    SW          V0, AC (S0)
+    .oA4
+    LW          V0, 78 (S0)
+    BNE         V0, R0, .oE4
+    NOP
+    LW          V1, B0 (S0)
+    LW          V0, 90 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .oD0
+    SW          V1, B0 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .oE0
+    ADDU        V0, V1, V0
+    .oD0
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .oE4
+    SUBU        V0, V1, A0
+    .oE0
+    SW          V0, B0 (S0)
+    .oE4
+    LW          V0, 7C (S0)
+    BNE         V0, R0, .o124
+    NOP
+    LW          V1, B4 (S0)
+    LW          V0, 94 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o110
+    SW          V1, B4 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .o120
+    ADDU        V0, V1, V0
+    .o110
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .o124
+    SUBU        V0, V1, A0
+    .o120
+    SW          V0, B4 (S0)
+    .o124
+    LW          A0, 84 (S0)
+    JAL         8011BC1C
+    LW          A1, A8 (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC34
+    LW          A1, AC (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC4C
+    LW          A1, B0 (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC64
+    LW          A1, B4 (S0)
+    LW          V0, 70 (S0)
+    LW          V1, 78 (S0)
+    LW          A0, 98 (S0)
+    ADDIU       V0, V0, 1
+    SW          V0, 70 (S0)
+    LW          V0, 74 (S0)
+    ADDIU       V1, V1, 1
+    SW          V1, 78 (S0)
+    LW          V1, 70 (S0)
+    ADDIU       V0, V0, 1
+    SW          V0, 74 (S0)
+    LW          V0, 7C (S0)
+    SLT         V1, V1, A0
+    ADDIU       V0, V0, 1
+    BNE         V1, R0, .o198
+    SW          V0, 7C (S0)
+    SW          R0, 70 (S0)
+    .o198
+    LW          V0, 74 (S0)
+    LW          V1, 9C (S0)
+    SLT         V0, V0, V1
+    BEQL        V0, R0, .o1AC
+    SW          R0, 74 (S0)
+    .o1AC
+    LW          V0, 78 (S0)
+    LW          V1, A0 (S0)
+    SLT         V0, V0, V1
+    BEQL        V0, R0, .o1C0
+    SW          R0, 78 (S0)
+    .o1C0
+    LW          V0, 7C (S0)
+    LW          V1, A4 (S0)
+    SLT         V0, V0, V1
+    BEQL        V0, R0, .o1D4
+    SW          R0, 7C (S0)
+    .o1D4
+    LW          RA, 14 (SP)
+    LW          S0, 10 (SP)
+    CLEAR       V0
+    JR          RA
+    ADDIU       SP, SP, 18
+}
+
+#new:Script $Script_EnterMap
+{
+    Exec    $Script_StepMenu
+    Exec    $Script_UpdateCameraZone
+    Exec    $Script_UpdateCursor_Levels
+    Call    GetEntryID ( *Var0 )
+    Switch *Var0
+        Case == ~Entry:Entry0 % title screen
+            Exec $Script_LogoEntrance
+            % clear $Data_Title_Cursor
+            Call $WriteAddress ( $Data_Title_Cursor 2 .False 0 .False ) % first bytes
+            Call $WriteAddress ( $Data_Title_Cursor 2 .False 4 .False ) % last bytes
+            If *Mod_StoryProgress > 0
+                Call    $WriteAddress ( $Data_Title_Cursor 0 1 1 .False ) % put cursor in "Continue"
+            EndIf
+        Case == ~Entry:Entry1 % replay mode
+            Call    $WriteAddress ( $Data_Title_Cursor 0 .False 3 .False ) % DisableMenuInputs
+            Call    $WriteAddress ( $Data_Title_Cursor 0 .False 6 .False ) % replayMode (bool)
+    EndSwitch
+	Return
+	End
+}
+
+% Update the menu and track inputs
+#new:Script $Script_StepMenu
+{
+    Loop
+        % Is a dialog box open?
+        Call    $ReadAddress ( 80155128 0 *Var0 .False .False )
+        If *Var0 != .False % message box active
+            Jump $Script_StepMenu
+        EndIf
+        % Are the menu inputs locked?
+        Call    $ReadAddress ( $Data_Title_Cursor 0 *Var0 3 .False ) % DisableMenuInputs
+        If *Var0 == .True
+            Jump $Script_StepMenu
+        EndIf
+        Call    $ReadAddress ( $Data_Title_Cursor 0 *Var1 2 .False ) % state
+        Call    $ReadAddress ( $Data_Title_Cursor 0 *Var2 1 .False ) % subCursor
+        Switch *Var1
+            Case == 00 % Title Screen
+                Call    $ReadAddress ( 80074034 2 *Var3 .False .False ) % one-time inputs
+                If *Var3 & .Buttons:A % 00008000
+                    Call    PlaySound ( 00C9 ) % accept
+                    Switch *Var2 % subCursor
+                        Case == 0 % New Game
+                            If *Mod_StoryProgress != 0
+                                Call	ShowMessageAtScreenPos ( $String_NewGame_Warning A0 28 )
+                                Call    ShowChoice    ( 001E001D ) % yes no
+                                If *Var0 == 1 % no
+                                    Call    CloseMessage
+                                    Wait    1
+                                    Jump    $Script_StepMenu
+                                Else % yes
+                                    Call    CloseMessage
+                                EndIf
+                            EndIf
+                            Exec    $Script_LogoLeaves
+                            Call    PlaySound ( 0010 ) % game saved
+                            Call    $WriteAddress ( $Data_Title_Cursor 0 .True 3 .False ) % DisableMenuInputs
+                            Call    $WriteAddress ( $Data_Title_Cursor 0 6 2 .False ) % set state as "Start New Game"
+                            Set     *Mod_StoryProgress 1
+                            % leave the rom
+                            Call    SetPlayerAnimation ( 000A0000 )
+                            Call    SetPlayerAnimation ( 000A0002 ) % walking
+                            Call    SetPlayerSpeed ( *Fixed[2.0] )
+                            Call    GetPlayerPos ( *Var0 *Var1 *Var2 )
+                            Add     *Var2 67 % z
+                            Call    PlayerMoveTo ( *Var0 *Var2 0 )
+                            Call    SetPlayerSpeed ( *Fixed[4.0] )
+                            Call    SetPlayerAnimation ( 000A0000 )
+                            Call    SetPlayerAnimation ( 000A0003 ) % running
+                            Add     *Var0 -300 % x
+                            Thread
+                                Call    PlayerMoveTo ( *Var0 *Var2 0 )
+                            EndThread
+                            Wait    10`
+                            Call    GotoMap ( "lvl_11" 0 )
+                            Call    $RunFunction ( $SaveGame )
+                            Return
+                        Case == 1 % Continue
+                            Call    PlaySound ( 0010 ) % game saved
+                            Call    $WriteAddress ( $Data_Title_Cursor 0 .True 3 .False ) % DisableMenuInputs
+                            Switch *Mod_StoryProgress
+                                Case <= 1
+                                    Call GotoMap ( "lvl_11" 0 )
+                                Case == 2
+                                    Call GotoMap ( "lvl_01" 0 )
+                                Case == 3
+                                    Call GotoMap ( "lvl_02" 0 )
+                                Case == 4
+                                    Call GotoMap ( "lvl_03" 0 )
+                                Case == 5
+                                    Call GotoMap ( "lvl_04" 0 )
+                                Case >= 6
+                                    Call GotoMap ( "lvl_05" 0 )
+                            EndSwitch
+                            Call    SetPlayerAnimation ( 000A0000 )
+                            Call    SetPlayerAnimation ( 000C0009 ) % happy
+                            Return
+                        Case == 2 % Levels
+                            Call    $WriteAddress ( $Data_Title_Cursor 1 100 0 .False ) % set cursor pos
+                            Call    $WriteAddress ( $Data_Title_Cursor 0 1 2 .False ) % Set state to "Move to levels"
+                            Wait    1
+                            Jump    $Script_StepMenu
+                    EndSwitch
+                EndIf
+                If *Var3 & .Buttons:B % 00004000
+                    % Nothing
+                EndIf
+                If *Mod_StoryProgress > 0
+                    If *Var3 & 00010000 % Joystick Up
+                        Switch *Var2 % subCursor
+                            Case == 0
+                                If *Level1_Beaten == .True
+                                    Set *Var2 2
+                                Else
+                                    Set *Var2 1 % means only continue is available
+                                EndIf
+                            Default
+                                Sub *Var2 1
+                        EndSwitch
+                        Call    PlaySound ( 00C7 ) % move cursor
+                        Call    $WriteAddress ( $Data_Title_Cursor 0 *Var2 1 .False ) % subCursor
+                    EndIf
+                    If *Var3 & 00020000 % Joystick Down
+                        Switch *Var2 % subCursor
+                            Case == 1
+                                If *Level1_Beaten == .False
+                                    Set *Var2 0 % means only continue is available
+                                Else
+                                    Add *Var2 1
+                                EndIf
+                            Case == 2
+                                Set *Var2 0
+                            Default
+                                Add *Var2 1
+                        EndSwitch
+                        Call    PlaySound ( 00C7 ) % move cursor
+                        Call    $WriteAddress ( $Data_Title_Cursor 0 *Var2 1 .False )
+                    EndIf
+                EndIf
+            CaseOR == 01 % Move to Levels
+            CaseOR == 02 % Levels_init
+            CaseOR == 04 % Levels_leave
+            CaseOR == 05 % Move to title screen
+            CaseOR == 06 % Start New Game
+                % Nothing
+            EndCaseGroup
+            Case == 03 % Levels_step
+                Call    $ReadAddress ( 80074034 2 *Var3 .False .False ) % one-time inputs
+                If *Var3 & .Buttons:A % 00008000
+                    Call    PlaySound ( 0010 ) % game saved
+                    Call    $WriteAddress ( $Data_Title_Cursor 0 .True 3 .False ) % DisableMenuInputs
+                    Call    $WriteAddress ( $Data_Title_Cursor 0 .True 6 .False ) % replayMode (bool)
+                    Switch *Var2 % subCursor
+                        Case == 0 % Peach Castle
+                            Call    GotoMap ( "lvl_01" 0 )
+                        Case == 1 % Toad Town
+                            Call    GotoMap ( "lvl_02" 0 )
+                        Case == 2 % Shy Guy
+                            Call    GotoMap ( "lvl_03" 0 )
+                        Case == 3 % Lavalava
+                            Call    GotoMap ( "lvl_04" 0 )
+                        Case == 4 % Shiver Mountain
+                            Call    GotoMap ( "lvl_05" 0 )
+                    EndSwitch
+                    Return
+                EndIf
+                If *Var3 & .Buttons:B % 00004000
+                    % go back to the title screen
+                    Call    PlaySound ( 00CA ) % cancel
+                    Call    $WriteAddress ( $Data_Title_Cursor 0 4 2 .False ) % Set state as "Levels_leave"
+                    Call    $WriteAddress ( $Data_Title_Cursor 0 0 0 .False ) % cursor pos
+                    Call    $WriteAddress ( $Data_Title_Cursor 0 2 1 .False ) % subCursor pos
+                    Wait    1
+                    Jump    $Script_StepMenu
+                EndIf
+                Set *Var4 0
+                Add *Var4 *Level1_Beaten
+                Add *Var4 *Level2_Beaten
+                Add *Var4 *Level3_Beaten
+                Add *Var4 *Level4_Beaten
+                Add *Var4 *Level5_Beaten
+                If *Var4 > 1 % More than 1 level unlocked
+                    If *Var3 & 00010000 % Joystick Up
+                        Switch *Var2 % subCursor
+                            Case == 0
+                                Set *Var2 *Var4
+                                Sub *Var2 1
+                            Default
+                                Sub *Var2 1
+                        EndSwitch
+                        Call    PlaySound ( 00C7 ) % move cursor
+                        Call    $WriteAddress ( $Data_Title_Cursor 0 *Var2 1 .False ) % subCursor
+                    EndIf
+                    If *Var3 & 00020000 % Joystick Down
+                        Sub *Var4 1
+                        If *Var2 == *Var4 % last element from the menu
+                            Set *Var2 0
+                        Else
+                            Add *Var2 1
+                        EndIf
+                        Call    PlaySound ( 00C7 ) % move cursor
+                        Call    $WriteAddress ( $Data_Title_Cursor 0 *Var2 1 .False ) % subCursor
+                    EndIf
+                EndIf
+        EndSwitch
+        Wait    1
+    EndLoop
+    Return
+    End
+}
+
+% Update the camera zone according to the menu state
+#new:Script $Script_UpdateCameraZone
+{
+    Loop % update camera zone
+        Call    SetZoneEnabled ( ~Zone:logo .False )
+        Call    SetZoneEnabled ( ~Zone:levels_1 .False )
+        Call    SetZoneEnabled ( ~Zone:levels_2 .False )
+        Call    SetZoneEnabled ( ~Zone:normal1 .False )
+        Call    SetZoneEnabled ( ~Zone:normal2 .False )
+        Call    $ReadAddress ( $Data_Title_Cursor 0 *Var1 2 .False ) % state
+        Switch *Var1
+            Case == 00 % Title Screen
+                Call    SetZoneEnabled ( ~Zone:logo .True )
+            Case == 01 % Move to Levels
+                Call    SetZoneEnabled ( ~Zone:levels_1 .True )
+            Case == 02 % Levels_init
+                Call    SetZoneEnabled ( ~Zone:levels_2 .True )
+            Case == 03 % Levels_step
+                Call    SetZoneEnabled ( ~Zone:levels_2 .True )
+            Case == 04 % Levels_leave
+                Call    SetZoneEnabled ( ~Zone:levels_1 .True )
+            Case == 05 % Move to title screen
+                Call    SetZoneEnabled ( ~Zone:logo .True )
+            Case == 06 % Start New Game
+                Call    SetZoneEnabled ( ~Zone:normal1 .True )
+                Call    SetZoneEnabled ( ~Zone:normal2 .True )
+                Call    ResetCam ( .Cam:Default *Fixed[3.0] )
+                Return
+        EndSwitch
+        Call    ResetCam ( .Cam:Default *Fixed[3.0] )
+        Switch *Var1
+            Case == 1 % Move to Levels
+                Call    $WriteAddress ( $Data_Title_Cursor 0 2 2 .False ) % set state as "Levels_init"
+            Case == 5 % Move to title screen
+                Call    $WriteAddress ( $Data_Title_Cursor 0 0 2 .False ) % set state as "Title screen"
+        EndSwitch
+        Wait    1
+    EndLoop
+    Return
+    End
+}
+
+% Update models positions according to the cursor pos
+#new:Script $Script_UpdateCursor_Levels
+{
+    Loop
+        Call    TranslateGroup ( ~Model:L1 0 0 0 )
+        Call    TranslateGroup ( ~Model:L2 0 0 0 )
+        Call    TranslateGroup ( ~Model:L3 0 0 0 )
+        Call    TranslateGroup ( ~Model:L4 0 0 0 )
+        Call    TranslateGroup ( ~Model:L5 0 0 0 )
+        Call    $ReadAddress ( $Data_Title_Cursor 0 *Var1 0 .False ) % cursor
+        If *Var1 == 1 % levels
+            Call    $ReadAddress ( $Data_Title_Cursor 0 *Var2 1 .False ) % subCursor
+            Switch *Var2
+                Case == 0 % Peach's Castle
+                    Set *Var0 ~Model:L1
+                Case == 1 % Toad Town
+                    Set *Var0 ~Model:L2
+                Case == 2 % Shy Guy
+                    Set *Var0 ~Model:L3
+                Case == 3 % Lavalava
+                    Set *Var0 ~Model:L4
+                Case == 4 % Shiver Mountain
+                    Set *Var0 ~Model:L5
+            EndSwitch
+            Call    TranslateGroup ( *Var0 9 0 0 )
+        EndIf
+        Wait    1
+    EndLoop
+    Return
+    End
+}
+
+#new:Script $Script_LogoEntrance
+{
+    Call    TranslateGroup ( ~Model:Logo 0 93` 0 )
+    Call    MakeLerp    	( 98` 0 15` .Easing:QuadraticIn )
+    Loop     
+        Call     UpdateLerp
+        Call     TranslateGroup ( ~Model:Logo 0 *Var0 0 )
+        Wait     1
+        If  *Var1  ==  .False
+            BreakLoop
+        EndIf
+    EndLoop
+    %
+    Call    MakeLerp    	( -5 3 5 .Easing:QuadraticIn )
+    Loop     
+        Call     UpdateLerp
+        Call     TranslateGroup ( ~Model:Logo 0 *Var0 0 )
+        Wait     1
+        If  *Var1  ==  .False
+            BreakLoop
+        EndIf
+    EndLoop
+    %
+    Call    MakeLerp    	( 5 -3 5 .Easing:QuadraticIn )
+    Loop     
+        Call     UpdateLerp
+        Call     TranslateGroup ( ~Model:Logo 0 *Var0 0 )
+        Wait     1
+        If  *Var1  ==  .False
+            BreakLoop
+        EndIf
+    EndLoop
+    %
+    Call    MakeLerp    	( -3 0 5 .Easing:QuadraticIn )
+    Loop     
+        Call     UpdateLerp
+        Call     TranslateGroup ( ~Model:Logo 0 *Var0 0 )
+        Wait     1
+        If  *Var1  ==  .False
+            BreakLoop
+        EndIf
+    EndLoop
+    Return
+    End
+}
+
+#new:Script $Script_LogoLeaves
+{
+    %
+    Call    MakeLerp    	( 0 -3 5 .Easing:QuadraticIn )
+    Loop     
+        Call     UpdateLerp
+        Call     TranslateGroup ( ~Model:Logo 0 *Var0 0 )
+        Wait     1
+        If  *Var1  ==  .False
+            BreakLoop
+        EndIf
+    EndLoop
+    %
+    Call    MakeLerp    	( -3 5 5 .Easing:QuadraticIn )
+    Loop     
+        Call     UpdateLerp
+        Call     TranslateGroup ( ~Model:Logo 0 *Var0 0 )
+        Wait     1
+        If  *Var1  ==  .False
+            BreakLoop
+        EndIf
+    EndLoop
+    %
+    Call    MakeLerp    	( 5 0 5 .Easing:QuadraticIn )
+    Loop     
+        Call     UpdateLerp
+        Call     TranslateGroup ( ~Model:Logo 0 *Var0 0 )
+        Wait     1
+        If  *Var1  ==  .False
+            BreakLoop
+        EndIf
+    EndLoop
+    Call    MakeLerp    	( 0 98` 15` .Easing:QuadraticIn )
+    Loop     
+        Call     UpdateLerp
+        Call     TranslateGroup ( ~Model:Logo 0 *Var0 0 )
+        Wait     1
+        If  *Var1  ==  .False
+            BreakLoop
+        EndIf
+    EndLoop  
+    Return
+    End
+}
+
+#new:Script $Script_SetRandomAnimation
+{
+    % set a random animation for peach
+    Wait    5
+    Call    RandInt ( 5 *Var0 )
+    Switch *Var0
+        Case == 0 % idle
+            Call    SetPlayerAnimation ( 000A0000 )
+            Call    SetPlayerAnimation ( 000A0001 )
+        Case == 1 % :D
+            Call    SetPlayerAnimation ( 000A0000 )
+            Call    SetPlayerAnimation ( 000C0000 )
+        Case == 2 % Sleeping
+            Call    SetPlayerAnimation ( 000A0000 )
+            Call    SetPlayerAnimation ( 000C0004 )
+        Case == 3 % Anxious
+            Call    SetPlayerAnimation ( 000A0000 )
+            Call    SetPlayerAnimation ( 000C000C )
+        Case == 4 % Angry
+            Call    SetPlayerAnimation ( 000A0000 )
+            Call    SetPlayerAnimation ( 000C0012 )
+        Case == 5 % Mixing
+            Call    SetPlayerAnimation ( 000A0000 )
+            Call    SetPlayerAnimation ( 000C001F )
+    EndSwitch
+    Return
+    End
+}
+
+#new:Script $Script_CreateExitTriggers
+{
+	Return
+	End
+}
+
+% strings
+
+#string $String_NewGame_Warning
+{
+[Style Inspect][DelayOff]
+If you start a new game once[BR]
+again, your progress will get[BR]
+reset.[BR]
+[Wait][Next]
+Although your levels will stay[BR]
+unlocked and your scores will stay[BR]
+the same along with your stars.[BR]
+[Wait][Next]
+Are you sure you want to start[BR]
+a new game?
+[Yield][End]
+}

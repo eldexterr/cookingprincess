@@ -1,0 +1,129 @@
+% Make possible for Peach to run while holding an object
+
+@Function E23D80 % 802B66A0 % Actions_Walk.wscr
+{
+    NOP
+}
+
+%%
+% Add a little speed boost when the player press the Z button
+%%
+
+#new:Data $Data_Dash
+{
+    0000s % timer
+    0000s % state / 01=increase, 02=decrease
+}
+
+@Hook E23F08 % 802B6828 % Actions_Walk.wscr
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S1, F4, F6, F8, F10
+    LIO     S1, $Data_Dash
+    LAW     A0, 80074034 % one-frame inputs
+    ORI     A1, R0, 2000 % Z button / one-frame inputs[2] - bit5
+    AND     A0, A0, A1
+    BEQ     A0, R0, .UpdateTimer
+    NOP
+    % player pressed the Z button
+    %
+    % check if player can dash
+    LHU     A0, 2 (S1) % state
+    ORI     A1, R0, 1 % increase
+    BEQ     A0, A1, .UpdateTimer % timer is increasing
+    NOP
+    % start dashing
+    %
+    % check if peach is carrying an item
+    LABU    A0, 800740A4 % carrying byte
+    BNE     A0, R0, .AnimationSet
+    NOP
+    % change animation
+    LIO     A0, 000A0004 % running while holding dress
+    JAL     ~Func:suggest_player_anim_clearUnkFlag
+    RESERVED
+    .AnimationSet
+    CLEAR	A2
+    LIA		A0, $Script_PlayRunFXandSFX
+    JAL		~Func:start_script
+    ADDIU	A1, R0, 1
+    ADDIU	A1, R0, 1
+    SH      R0, 0 (S1) % clear timer
+    SH      A1, 2 (S1) % set state as 01/increase
+    .UpdateTimer
+    LHU     A1, 0 (S1) % timer
+    LHU     A0, 2 (S1) % state
+    ORI     A2, R0, 1 % increase timer
+    BEQ     A0, A2, .UpdateTimer_Increase
+    ORI     A2, R0, 2 % decrease timer
+    BEQ     A0, A2, .UpdateTimer_Decrease
+    NOP
+    BEQ     R0, R0, .UpdateSpeed
+    NOP
+    .UpdateTimer_Increase
+    ADDIU   A1, A1, 1
+    SH      A1, 0 (S1) % timer
+    SLTIU   A2, A1, 10` % player can dash once again every 10 frames
+    ORI     A3, R0, 2 % decrease
+    BEQL    A2, R0, .UpdateSpeed
+    SH      A3, 2 (S1) % state, set state as 02/decrease
+    BEQ     R0, R0, .UpdateSpeed
+    NOP
+    .UpdateTimer_Decrease
+    ADDI    A1, A1, -1
+    SH      A1, 0 (S1) % timer
+    SLTIU   A2, A1, 1
+    BNEL    A2, R0, .UpdateSpeed
+    SH      R0, 2 (S1) % clear state
+    .UpdateSpeed % update the speed by reading the dash data
+    LIF     F4, 4.0 % default runSpeed
+    LIF     F6, 0.6 % add this amount of speed every frame
+    LHU     A0, 0 (S1) % timer
+    MTC1    A0, F8
+    NOP
+    CVT.S.W F10, F8
+    NOP
+    MUL.S   F8, F6, F10
+    NOP
+    ADD.S   F4, F8, F4
+    SWC1    F4, 5C (S0) % save runSpeed
+    % check if peach should stop doing the running animation
+    LW      A0, 0 (S1)
+    BNE     A0, R0, .End
+    NOP
+    % check if peach is carrying an item
+    LABU    A0, 800740A4 % carrying byte
+    BNE     A0, R0, .End
+    NOP
+    % change animation
+    LIO     A0, 000A0003 % running
+    JAL     ~Func:suggest_player_anim_clearUnkFlag
+    RESERVED
+    .End
+    POP     RA, A0, A1, A2, A3, V0, V1, S1, F4, F6, F8, F10
+    % restore vanilla code
+    ADDIU   A0, SP, 10
+    J       802B6830
+    LWC1    F0, 5C (S0) % load runSpeed    
+}
+
+#new:Script $Script_PlayRunFXandSFX
+{
+    %Call    PlaySound ( 0172 )
+    Call    GetPlayerPos ( *Var0 *Var1 *Var2 )
+    Add     *Var0 0 % x
+    Add     *Var1 0 % y
+    Add     *Var2 -1 % z
+    Call    PlayEffect    ( ~FX:Steam:Ring *Var0 *Var1 *Var2 00000000 00000000 .False .False .False .False .False .False .False )
+    Return
+    End
+}
+
+% clear $Data_Dash when the player is static
+@Hook E23284 % 802B6024 % Actions_Idle.wscr
+{
+    SAW     R0, $Data_Dash
+    % restore vanilla code
+    LIO     S2, 8010F290
+    J       802B602C
+    RESERVED
+}

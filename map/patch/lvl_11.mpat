@@ -1,0 +1,334 @@
+% Tutorial map
+
+#new:Header $Header
+{
+	[MainScript] $Script_Main
+	[Background] 80200000
+	[EntryList] $EntryList
+	[EntryCount] 2
+}
+
+#new:EntryList $EntryList
+{
+	~Vec4f:Entry0
+    ~Vec4f:Entry1
+}
+
+#new:Script_Main $Script_Main
+{
+    Set   *GameState 2 % Tutorial
+	Set   *GB_WorldLocation  .Location:PeachsCastle
+    Exec  $Script_ClearMinigameData
+	Call  SetCamPerspective  ( .Cam:Default 00000003 00000019 00000010 00001000 )
+	Call  SetCamBGColor      ( .Cam:Default 00000000 00000000 00000000 )
+	Call  SetCamEnabled      ( .Cam:Default .True )
+	Call  SetCamLeadPlayer   ( .Cam:Default .False )
+    Call  ClearAmbientSounds ( 250` )
+	Exec  $Script_EnterMap    
+	Return
+	End
+}
+
+#new:Function_Init $Function_Init
+{
+	PUSH    RA
+	LIA     A0, 800B0CF0
+	LIA     A1, "kkj_tex"
+	JAL     800654F0 % sprintf
+	RESERVED
+	CLEAR  V0
+	JPOP   RA
+}
+
+#new:Script $Script_EnterMap
+{
+    Call    GetEntryID ( *Var0 )
+    If *Var0 == ~Entry:Entry0
+        Call  SetMusicTrack ( 00000000 .Song:KoopaVillage 00000000 00000008 )
+        Exec $Script_GameTutorial
+    Else % game ending
+        Call    SetMusicTrack ( 00000000 .Song:Club64 00000000 00000008 )
+        Call    EnableGroup ( ~Model:stove_group .False )
+        Call    MakeNpcs ( 0 $NpcGroupList_lvl11 )
+        Call 	AdjustCam ( .Cam:Default *Fixed[8.0] *Fixed[0.0] *Fixed[300.0] *Fixed[20.0] *Fixed[-7.0] ) % camID ? RightOffset BoomLenght BoomPitch ViewPitch
+        Set     *Mod_StoryProgress 6 % go back to last level
+        Call    DisablePlayerInput ( .True )
+        Call    SetPlayerAnimation ( 000C0010 ) % hands raised
+        Call    ShowMessageAtScreenPos ( $String_Ending A0 28 )
+        Wait    10`
+        Call    GotoMap ( "lvl_10" 0 )
+        Call    $RunFunction ( $SaveGame )
+    EndIf
+	Return
+	End
+}
+
+% NPCs
+
+#new:NpcGroupList $NpcGroupList_lvl11
+{
+00000004 $NpcGroup_Decorations 	00000000
+00000000 00000000 00000000 
+}
+
+#new:NpcGroup $NpcGroup_Decorations
+{
+00000000 $NpcSettings_Decoration ~vec3f:NPC_Toad1
+00000020 $Script_null 00000000 00000000 00000000
+~NoDrops
+~Movement:NPC_Toad1
+~AnimationTable:NPC_Toad1
+00000000 00000000 00000000 00000000
+%
+00000001 $NpcSettings_Decoration ~vec3f:NPC_Toad2
+00000020 $Script_null 00000000 00000000 0000010E  
+~NoDrops
+~Movement:NPC_Toad2
+~AnimationTable:NPC_Toad2
+00000000 00000000 00000000 00000000
+%
+00000002 $NpcSettings_Decoration ~vec3f:NPC_Luigi1
+00000020 $Script_null 00000000 00000000 00000000 
+~NoDrops
+~Movement:NPC_Luigi1
+~AnimationTable:NPC_Luigi1
+00000000 00000000 00000000 00000000
+%
+00000003 $NpcSettings_Decoration ~vec3f:NPC_Mario1
+00000020 $Script_null 00000000 00000000 0000010E  
+~NoDrops
+~Movement:NPC_Mario1
+~AnimationTable:NPC_Mario1
+00000000 00000000 00000000 00000000
+}
+
+#new:NpcSettings $NpcSettings_Decoration
+{
+00000000 00200025 00000000 00000000 00000000 00000000 00000000 00000000
+00000000 00000000 00630000 
+}
+
+#new:Script $Script_null
+{
+    Return
+    End
+}
+
+%
+
+#new:Script $Script_GameTutorial
+{
+    Call    DisablePlayerInput ( .True )
+    Exec    $Script_Tutorial_SpawnItems
+    Call    ShowMessageAtScreenPos ( $String_Tutorial_1 A0 28 )
+    Call 	$WriteAddress ( 800740A4 0 1 .False .False ) % do carrying animation
+    % show 3 items
+	Call	$SetPeachItem ( 0 .Item:CakeMix .ItemType:Ingredient )
+    Call	SetPlayerAnimation ( 000A0007 ) % idle - carrying item
+    Wait    25`
+    Call	SetItemFlags ( 0 00000001 .False ) % turn item invisible
+    %
+	Call	$SetPeachItem ( 1 .Item:BakingEgg .ItemType:Ingredient )
+    Call	SetPlayerAnimation ( 000A0007 ) % idle - carrying item
+    Wait    25`
+    Call	SetItemFlags ( 1 00000001 .False ) % turn item invisible
+    %
+	Call	$SetPeachItem ( 2 .Item:BakingSugar .ItemType:Ingredient )
+    Call	SetPlayerAnimation ( 000A0007 ) % idle - carrying item
+    Wait    25`
+    Call	SetItemFlags ( 2 00000001 .False ) % turn item invisible
+    %
+    Call    ShowMessageAtScreenPos ( $String_Tutorial_2 A0 28 )
+    % Hide bowl
+    Call	SetItemFlags ( 3 00000001 .False ) % turn item invisible
+    Call	SetPlayerAnimation ( 000C001F ) % mixing
+    Wait    40`
+    % attach bowl to peach
+    Call	$SetPeachItem ( 3 .Item:CakeBowl .ItemType:Bowl )
+    Call	SetPlayerAnimation ( 000A0007 ) % idle - carrying item
+    Call	SetItemFlags ( 3 00000001 .True ) % turn item visible
+    Call    $ReplaceItem ( 3 .Item:CakeMixed .ItemType:BowlMixed *Var3 )
+    % move to empty pan
+    Call    SetPlayerSpeed ( *Fixed[2.0] )
+    Set     *Var0 ~PosXd:ItemPos_Pan
+    Set     *Var1 ~PosZd:ItemPos_Pan
+    Sub     *Var0 40` % x
+    Call    PlayerMoveTo ( *Var0 *Var1 0 )
+    Call    ShowMessageAtScreenPos ( $String_Tutorial_3 A0 28 )
+    Call    $ReplaceItem ( *Var3 .Item:CakeBowl .ItemType:Bowl *Var3 )
+    Call    $ReplaceItem ( 4 .Item:CakeBatter .ItemType:Mold *Var4 )
+    Wait    10`
+    % put bowl back
+    Call	$RunFunction ( $clear_peach_status )
+    Call    InterpPlayerYaw 	( -90` 0 )
+	Wait    2
+    Call    GetPlayerPos ( *Var0 *Var1 *Var2 )
+    Sub     *Var0 25` % x
+    Add     *Var1 15` % y
+    Call    SetItemPos ( *Var3 *Var0 *Var1 *Var2 )
+	Wait    15`
+    Call    InterpPlayerYaw 	( 90` 0 )
+    % move to pan
+    Call    GetPlayerPos ( *Var0 *Var1 *Var2 )
+    Add     *Var0 10` % x
+    Call    PlayerMoveTo ( *Var0 *Var2 0 )
+    Wait    3
+    % grab pan
+    Call	$SetPeachItem ( *Var4 .Item:CakeBatter .ItemType:Mold )
+    Call	SetPlayerAnimation ( 000A0007 ) % idle - carrying item
+    Wait    15`
+    % move to stove
+    Call    GetModelCenter ( ~Model:door )
+    Add     *Var2 10` % z
+    Call    PlayerMoveTo ( *Var0 *Var2 0 )
+    Call    ShowMessageAtScreenPos ( $String_Tutorial_4 A0 28 )
+    % hide item
+    Call	SetItemFlags ( *Var4 00000001 .False ) % turn item invisible
+    Call 	$WriteAddress ( 800740A4 0 .False .False .False ) % don't use carrying animation
+    Call    SetPlayerAnimation ( 000A0001 ) % idle
+    Wait    15`
+    Call    ShowMessageAtScreenPos ( $String_Tutorial_5 A0 28 )
+    % unhide item
+    Call	SetItemFlags ( *Var4 00000001 .True ) % turn item visible
+    Call 	$WriteAddress ( 800740A4 0 .True .False .False ) % use carrying animation
+    Call	SetPlayerAnimation ( 000A0007 ) % idle - carrying item
+    Wait    4
+    Set     *Var0 ~PosXd:ItemPos_Cake
+    Set     *Var1 ~PosZd:ItemPos_Cake
+    Sub     *Var0 40` % x
+    Call    PlayerMoveTo ( *Var0 *Var1 0 )
+    Wait    5
+    Call    $ReplaceItem ( *Var4 .Item:CakePan .ItemType:Mold *Var4 )
+    Call	SetItemFlags ( 5 00000001 .True ) % turn item visible
+    Wait    15`
+    % put pan back
+    Call    InterpPlayerYaw 	( -90` 0 )
+	Wait    10`
+    Call    GetPlayerPos ( *Var0 *Var1 *Var2 )
+    Sub     *Var0 25` % x
+    Add     *Var1 15` % y
+    Call	$RunFunction ( $clear_peach_status )
+    Call    SetItemPos ( *Var4 *Var0 *Var1 *Var2 )
+    Wait    15`
+    Call    InterpPlayerYaw 	( 90` 0 )
+	Wait    15`
+    % move to cake
+    Call    GetPlayerPos ( *Var0 *Var1 *Var2 )
+    Add     *Var0 10` % x
+    Call    PlayerMoveTo ( *Var0 *Var2 0 )
+    Wait    3
+    % grab cake
+    Call	$SetPeachItem ( 5 .Item:CakeBare .ItemType:BaseWCake )
+    Call	SetPlayerAnimation ( 000A0007 ) % idle - carrying item
+    Wait    15`
+    Call    ShowMessageAtScreenPos ( $String_Tutorial_6 A0 28 )
+    Call	$RunFunction ( $clear_peach_status )
+    Set     *Mod_StoryProgress 2
+    Call    GotoMap ( "lvl_01" 0 )
+    Return
+    End
+}
+
+#new:Script $Script_Tutorial_SpawnItems
+{
+    % spawn items
+    Call    DropItemEntity ( .Item:CakeMix 0 -1000` 0 .ItemSpawnMode:Decoration .False )
+    Call    $AddItemData ( .ItemType:Ingredient *Var0 .Item:CakeMix )
+    %   
+    Call    DropItemEntity ( .Item:BakingEgg 0 -1000` 0 .ItemSpawnMode:Decoration .False )
+    Call    $AddItemData ( .ItemType:Ingredient *Var0 .Item:BakingEgg )
+    %   
+    Call    DropItemEntity ( .Item:BakingSugar 0 -1000` 0 .ItemSpawnMode:Decoration .False )
+    Call    $AddItemData ( .ItemType:Ingredient *Var0 .Item:BakingSugar )
+    %
+    Call    DropItemEntity ( .Item:CakeBowl ~Vec3d:ItemPos_Bowl .ItemSpawnMode:Decoration .False )
+    Call    $AddItemData ( .ItemType:Bowl *Var0 .Item:CakeBowl )
+    %
+    Call    DropItemEntity ( .Item:CakePan ~Vec3d:ItemPos_Pan .ItemSpawnMode:Decoration .False )
+    Call    $AddItemData ( .ItemType:Mold *Var0 .Item:CakePan )
+    %
+    Call    DropItemEntity ( .Item:CakeBare ~Vec3d:ItemPos_Cake .ItemSpawnMode:Decoration .False )
+    Call    $AddItemData ( .ItemType:BaseWCake *Var0 .Item:CakeBare )
+    Call	SetItemFlags ( *Var0 00000001 .False ) % turn item invisible
+    Return
+    End
+}
+
+#new:Script $Script_CreateExitTriggers
+{
+	Return
+	End
+}
+
+#string $String_Tutorial_1
+{
+[Style Inspect][DelayOff]
+[BR]
+   - How to make a basic cake -
+[BR]
+[Wait][Next]
+You will need the following[BR]
+ingredients:[BR]
+[Wait][End]
+}
+
+#string $String_Tutorial_2
+{
+[Style Inspect][DelayOff]
+After putting the 3 items[BR]
+[SaveColor][Color:07]inside a bowl[RestoreColor], you will need to mix[BR]
+them.
+[Wait][End]
+}
+
+#string $String_Tutorial_3
+{
+[Style Inspect][DelayOff]
+Put the mix inside an [SaveColor][Color:07]empty pan[RestoreColor].
+[Wait][End]
+}
+
+#string $String_Tutorial_4
+{
+[Style Inspect][DelayOff]
+Put the pan inside a [SaveColor][Color:07]stove[RestoreColor].
+[Wait][End]
+}
+
+#string $String_Tutorial_5
+{
+[Style Inspect][DelayOff]
+After waiting for [SaveColor][Color:07]enough time[RestoreColor],[BR]
+take the cake out of the oven.[BR]
+[Wait][Next]
+And put the cake on any [SaveColor][Color:07]empty[BR]
+surface[RestoreColor].
+[Wait][End]
+}
+
+#string $String_Tutorial_6
+{
+[Style Inspect][DelayOff]
+Good luck cooking![BR]
+[Wait][Next]
+!!![BR]
+[Wait][Next]
+By the way you can [SaveColor][Color:07]run[RestoreColor] by[BR]
+[SaveColor][Color:07]pressing the [Z] button[RestoreColor].
+[Wait][End]
+}
+
+%
+
+#string $String_Ending
+{
+[Style Inspect]
+Thanks for playing![BR]
+[Wait][Next]
+Mod by elDexter[BR]
+Logo by KevinArthurLS[BR]
+[Wait][Next]
+Made for the[BR]
+Paper Mario Modding Jam 2022[BR]
+[Wait][End]
+}

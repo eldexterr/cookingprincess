@@ -1,0 +1,195 @@
+% Add new boxes styles to the game (used by ~Func:draw_box)
+
+% Don't crash the game after trying to load box style 0x17 or above
+@Function 8E7C0 % 800F5310
+{
+    SLTIU   V0, A1, 101` % set cap to 100 styles
+}
+
+% Load new styles
+@Hook 8E810 % 800F5360
+{
+    % A1 - Box Style ID
+    % Check if the ID is above 0x16, so is one of our new styles
+    SLTIU   V0, A1, 17
+    BNE     V0, R0, .VanillaStyle
+    NOP
+    % get new style
+    ORI     V0, R0, 17
+    BEQ     A1, V0, .Green
+    ORI     V0, R0, 18
+    BEQ     A1, V0, .Red
+    ORI     V0, R0, 19
+    BEQ     A1, V0, .White1
+    ORI     V0, R0, 1A
+    BEQ     A1, V0, .White2
+    ORI     V0, R0, 1B
+    BEQ     A1, V0, .White3
+    ORI     V0, R0, 1C
+    BEQ     A1, V0, .White4
+    ORI     V0, R0, 1D
+    BEQ     A1, V0, .SubBox
+    ORI     V0, R0, 1E
+    BEQ     A1, V0, .Timer
+    ORI     V0, R0, 1F
+    BEQ     A1, V0, .Timer_Red
+    ORI     V0, R0, 20
+    BEQ     A1, V0, .Timer_Green
+    NOP
+    BEQ     R0, R0, .VanillaStyle
+    NOP
+    % T1 = Box Data Pointer
+    .Green
+    LIO     T1, $BoxData_Green
+    BEQ     R0, R0, .End
+    RESERVED
+    .Red
+    LIO     T1, $BoxData_Red
+    BEQ     R0, R0, .End
+    RESERVED
+    .White1
+    LIO     T1, $BoxData_White1
+    BEQ     R0, R0, .End
+    RESERVED
+    .White2
+    LIO     T1, $BoxData_White2
+    BEQ     R0, R0, .End
+    RESERVED
+    .White3
+    LIO     T1, $BoxData_White3
+    BEQ     R0, R0, .End
+    RESERVED
+    .White4
+    LIO     T1, $BoxData_White4
+    BEQ     R0, R0, .End
+    RESERVED
+    .SubBox
+    LIO     T1, $BoxData_OrderSubBox
+    BEQ     R0, R0, .End
+    RESERVED
+    .Timer
+    LIO     T1, $BoxData_Timer
+    BEQ     R0, R0, .End
+    RESERVED
+    .Timer_Red
+    LIO     T1, $BoxData_Timer_Red
+    BEQ     R0, R0, .End
+    RESERVED
+    .Timer_Green
+    LIO     T1, $BoxData_Timer_Green
+    BEQ     R0, R0, .End
+    RESERVED
+    % If was one of the vanilla styles
+    .VanillaStyle
+    SLL	    V0, A1, 1
+    ADDU	V0, V0, A1
+    SLL	    V0, V0, 2
+    SUBU	V0, V0, A1
+    ADDU	T1, V0, V1
+    .End
+    J   800F5374
+    NOP
+}
+
+%==================
+% New Styles Data
+
+#new:Data $BoxData_Green
+{
+    01b  % texture
+    04`b % Box Type
+    01b  % ??
+    8Eb F2b 88b FFb % Box Color 1 - RGBA
+    0Eb 45b 0Ab FFb % Box Color 2 - RGBA
+    00b  % unused
+}
+
+#new:Data $BoxData_Red
+{
+    01b  % texture
+    04`b % Box Type
+    01b  % ??
+    EDb 87b 87b FFb % Box Color 1 - RGBA
+    8Fb 10b 10b FFb % Box Color 2 - RGBA
+    00b  % unused
+}
+
+#export:Data $BoxData_White1 % 19
+{
+    01b  % texture
+    04`b % Box Type
+    01b  % ??
+    FFb FFb FFb FFb % Box Color 1 - RGBA
+    FFb FFb FFb FFb % Box Color 2 - RGBA
+    00b  % unused
+}
+
+#export:Data $BoxData_White2 % 1A
+{
+    01b  % texture
+    04`b % Box Type
+    01b  % ??
+    FFb FFb FFb FFb % Box Color 1 - RGBA
+    FFb FFb FFb FFb % Box Color 2 - RGBA
+    00b  % unused
+}
+
+#export:Data $BoxData_White3 % 1B
+{
+    01b  % texture
+    04`b % Box Type
+    01b  % ??
+    FFb FFb FFb FFb % Box Color 1 - RGBA
+    FFb FFb FFb FFb % Box Color 2 - RGBA
+    00b  % unused
+}
+
+#export:Data $BoxData_White4 % 1C
+{
+    01b  % texture
+    04`b % Box Type
+    01b  % ??
+    FFb FFb FFb FFb % Box Color 1 - RGBA
+    FFb FFb FFb FFb % Box Color 2 - RGBA
+    00b  % unused
+}
+
+#new:Data $BoxData_OrderSubBox % 1D
+{
+    01b  % texture
+    04`b % Box Type
+    01b  % ??
+    D4b FAb FFb FFb % Box Color 1 - RGBA
+    57b 84b 8Ab FFb % Box Color 2 - RGBA
+    00b  % unused
+}
+
+#new:Data $BoxData_Timer % 1E
+{
+    01b  % texture
+    04b % Box Type
+    01b  % ??
+    00b 00b 00b FFb % Box Color 1 - RGBA
+    FFb FFb FFb FFb % Box Color 2 - RGBA
+    00b  % unused
+}
+
+#new:Data $BoxData_Timer_Red % 1F
+{
+    01b  % texture
+    04b % Box Type
+    01b  % ??
+    FFb 00b 00b FFb % Box Color 1 - RGBA
+    00b 00b 00b FFb % Box Color 2 - RGBA
+    00b  % unused
+}
+
+#new:Data $BoxData_Timer_Green % 20
+{
+    01b  % texture
+    04b % Box Type
+    01b  % ??
+    00b FFb 10b FFb % Box Color 1 - RGBA
+    00b 9Cb 0Ab FFb % Box Color 2 - RGBA
+    00b  % unused
+}

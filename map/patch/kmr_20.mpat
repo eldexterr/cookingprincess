@@ -1,0 +1,6 @@
+@ $Script_8024FD70 {
+    Call    $WriteAddress ( 800740A2 0 1 .False .False ) % spawn as Peach
+    Call    GotoMap ( "lvl_10" 0 )
+    Return
+    End
+}

@@ -1,0 +1,837 @@
+#import CookingGame_Cursor.mpat
+#import CookingGame_Main.mpat
+
+#new:Header $Header
+{
+	[MainScript] $Script_Main
+	[Background] 00000000
+	[EntryList] $EntryList
+	[EntryCount] 1
+}
+
+#new:EntryList $EntryList
+{
+	~Vec4f:Entry0
+}
+
+#new:Function_Init $Function_Init
+{
+	PUSH    RA
+	LIA     A0, 800B0CF0
+	LIA     A1, "sam_tex"
+	JAL     800654F0 % sprintf
+	RESERVED
+	CLEAR  V0
+	JPOP   RA
+}
+
+#new:Script_Main $Script_Main
+{
+    %%%
+	% Init level
+	%%%
+	%
+	% set this level timer
+	% time is formated as HHMMSSMsMs
+	Call  $WriteAddress ( $Minigame_Data 2 00050000 0 .False ) % 05:00
+	Exec  $Script_ClearMinigameData
+	Call  $WriteAddress ( 800740A2 0 1 .False .False ) % spawn as Peach
+	Call  DisablePlayerInput ( .True )
+    Call  SetCamSpeed ( .Cam:Default *Fixed[3.0] )
+    If *CameraMode == .False
+        Call    SetZoneEnabled ( 2 .False )
+    Else
+        Call    SetZoneEnabled ( 0 .False )
+        Call    SetZoneEnabled ( 1 .False )
+    EndIf
+	% generic
+	Call    FadeOutMusic  ( 00000000 000001F4 ) % stop music
+	Set     *GB_WorldLocation  .Location:ShiverMountain
+	Call    SetCamPerspective  ( .Cam:Default 00000003 00000019 00000010 00001000 )
+	Call    SetCamBGColor      ( .Cam:Default 00000000 00000000 00000000 )
+	Call    SetCamEnabled      ( .Cam:Default .True )
+	Call    SetCamLeadPlayer   ( .Cam:Default .False )
+    Exec    $Script_EnterMap
+	Exec    $Script_SetupTexturePan
+    Call    MakeNpcs ( 0 $NpcGroupList_lvl05 )
+    %
+    Bind    $Script_KillPlayer .Trigger:FloorTouch ~Collider:die 00000001 00000000
+    Exec    $Script_UpdateHazards
+    %
+	% Minigame scripts
+	%
+	Set   *GameState 3 % cooking game - start
+    Exec  $Script_SetupMusic
+    Exec  $Script_UpdateCursor
+    Exec  $Script_BindScripts_Special
+	Exec  $Script_InitItemEntities
+	Exec  $Script_DispatchNewOrders_Init
+    Wait  5
+	Return
+	End
+}
+
+#new:Script $Script_SetupMusic
+{
+	Loop % wait until the game starts
+		If *GameState == 4 % cooking game - step
+			BreakLoop
+		EndIf
+		Wait	1
+	EndLoop
+	Call  SetMusicTrack ( 00000000 .Song:ShiverSnowfield 00000000 00000008 )
+	Call  ClearAmbientSounds ( 250` )
+	Return
+	End
+}
+
+% NPCs
+
+#new:NpcGroupList $NpcGroupList_lvl05
+{
+00000007 $NpcGroup_LeftSide 	00000000
+00000007 $NpcGroup_RightSide 	00000000
+00000000 00000000 00000000 
+}
+
+#new:NpcGroup $NpcGroup_LeftSide
+{
+00000001 $NpcSettings_Decoration 0.0 -1000.0 0.0
+00002001 $Script_InitDummyNPC 00000000 00000000 00000000 
+~NoDrops
+~Movement:NPC_Toad
+~AnimationTable:NPC_Toad
+00000000 00000000 00000000 00000000
+%
+00000002 $NpcSettings_Decoration 0.0 -1000.0 0.0
+00002001 $Script_InitDummyNPC 00000000 00000000 00000000 
+~NoDrops
+~Movement:NPC_Toad
+~AnimationTable:NPC_Toad
+00000000 00000000 00000000 00000000
+%
+00000003 $NpcSettings_Decoration 0.0 -1000.0 0.0
+00002001 $Script_InitDummyNPC 00000000 00000000 00000000 
+~NoDrops
+~Movement:NPC_Toad
+~AnimationTable:NPC_Toad
+00000000 00000000 00000000 00000000
+%
+00000004 $NpcSettings_Decoration 0.0 -1000.0 0.0
+00002001 $Script_InitDummyNPC 00000000 00000000 00000000 
+~NoDrops
+~Movement:NPC_Toad
+~AnimationTable:NPC_Toad
+00000000 00000000 00000000 00000000
+%
+00000005 $NpcSettings_Decoration 0.0 -1000.0 0.0
+00002001 $Script_InitDummyNPC 00000000 00000000 00000000
+~NoDrops
+~Movement:NPC_Toad
+~AnimationTable:NPC_Toad
+00000000 00000000 00000000 00000000
+%
+00000006 $NpcSettings_Decoration 0.0 -1000.0 0.0
+00002001 $Script_InitDummyNPC 00000000 00000000 00000000 
+~NoDrops
+~Movement:NPC_Toad
+~AnimationTable:NPC_Toad
+00000000 00000000 00000000 00000000
+%
+00000007 $NpcSettings_Decoration 0.0 -1000.0 0.0
+00002001 $Script_InitDummyNPC 00000000 00000000 00000000 
+~NoDrops
+~Movement:NPC_Toad
+~AnimationTable:NPC_Toad
+00000000 00000000 00000000 00000000
+}
+
+#new:NpcGroup $NpcGroup_RightSide
+{
+00000008 $NpcSettings_Decoration 0.0 -1000.0 0.0
+00002001 $Script_InitDummyNPC 00000000 00000000 00000000 
+~NoDrops
+~Movement:NPC_Toad
+~AnimationTable:NPC_Toad
+00000000 00000000 00000000 00000000
+%
+00000009 $NpcSettings_Decoration 0.0 -1000.0 0.0
+00002001 $Script_InitDummyNPC 00000000 00000000 00000000 
+~NoDrops
+~Movement:NPC_Toad
+~AnimationTable:NPC_Toad
+00000000 00000000 00000000 00000000
+%
+0000000A $NpcSettings_Decoration 0.0 -1000.0 0.0
+00002001 $Script_InitDummyNPC 00000000 00000000 00000000 
+~NoDrops
+~Movement:NPC_Toad
+~AnimationTable:NPC_Toad
+00000000 00000000 00000000 00000000
+%
+0000000B $NpcSettings_Decoration 0.0 -1000.0 0.0
+00002001 $Script_InitDummyNPC 00000000 00000000 00000000 
+~NoDrops
+~Movement:NPC_Toad
+~AnimationTable:NPC_Toad
+00000000 00000000 00000000 00000000
+%
+0000000C $NpcSettings_Decoration 0.0 -1000.0 0.0
+00002001 $Script_InitDummyNPC 00000000 00000000 00000000
+~NoDrops
+~Movement:NPC_Toad
+~AnimationTable:NPC_Toad
+00000000 00000000 00000000 00000000
+%
+0000000D $NpcSettings_Decoration 0.0 -1000.0 0.0
+00002001 $Script_InitDummyNPC 00000000 00000000 00000000 
+~NoDrops
+~Movement:NPC_Toad
+~AnimationTable:NPC_Toad
+00000000 00000000 00000000 00000000
+%
+0000000E $NpcSettings_Decoration 0.0 -1000.0 0.0
+00002001 $Script_InitDummyNPC 00000000 00000000 00000000 
+~NoDrops
+~Movement:NPC_Toad
+~AnimationTable:NPC_Toad
+00000000 00000000 00000000 00000000
+}
+
+#new:NpcSettings $NpcSettings_Decoration
+{
+00000000 00200025 00000000 00000000 00000000 00000000 00000000 00000000
+00000000 00000000 00630000 
+}
+
+#new:Script $Script_InitDummyNPC
+{
+    Call    SetNpcFlagBits ( .Npc:Self 05000000 .True ) % invisible and ignore player's collision
+    Return
+    End
+}
+
+%
+
+% Cooking game
+
+#new:Script $Script_BindScripts_Special {
+	% Delivery Point
+	Bind     $Script_DeliveryPoint .Trigger:WallPressA ~Collider:delivery1 00000001 00000000
+	Bind     $Script_DeliveryPoint .Trigger:WallPressA ~Collider:delivery2 00000001 00000000
+	% Mix Points
+	Bind     $Script_MixPoint .Trigger:WallPressA ~Collider:mixer1 00000001 00000000
+	% Trash bin
+	Bind     $Script_TrashBin .Trigger:WallPressA ~Collider:trash1 00000001 00000000
+	% Stove
+	Bind     $Script_Stove_1 .Trigger:WallPressA ~Collider:stove1 00000001 00000000
+    Bind     $Script_Stove_2 .Trigger:WallPressA ~Collider:stove2 00000001 00000000
+	% Cutting table
+	Bind     $Script_Cutting .Trigger:WallPressA ~Collider:cutting1 00000001 00000000
+	% Dispatchers
+    Bind     $Script_Dispatcher_CakeMix .Trigger:WallPressA ~Collider:disp_flour 00000001 00000000
+    Bind     $Script_Dispatcher_Egg .Trigger:WallPressA ~Collider:disp_egg 00000001 00000000
+    Bind     $Script_Dispatcher_Sugar .Trigger:WallPressA ~Collider:disp_sugar 00000001 00000000
+    Bind     $Script_Dispatcher_Cream .Trigger:WallPressA ~Collider:disp_cream 00000001 00000000
+    Bind     $Script_Dispatcher_BlueBerry .Trigger:WallPressA ~Collider:disp_blue 00000001 00000000
+    Return
+    End
+}
+
+#new:Script $Script_InitItemEntities {
+	% Init Mix Bowls
+	Set	    *Var0 	~Collider:itemPos_Bowl1
+	ExecWait $Script_GetItemPosForCollider
+	Set		*Var3 .Item:CakeBowl
+	Call	DropItemEntity ( *Var3 *Var0 *Var1 *Var2 .ItemSpawnMode:Decoration .False )
+	Call 	$AddItemData ( .ItemType:Bowl *Var0 *Var3 )
+	%
+	Set	    *Var0 	~Collider:itemPos_Bowl2
+	ExecWait $Script_GetItemPosForCollider
+	Set		*Var3 .Item:CakeBowl
+	Call	DropItemEntity ( *Var3 *Var0 *Var1 *Var2 .ItemSpawnMode:Decoration .False )
+	Call 	$AddItemData ( .ItemType:Bowl *Var0 *Var3 )
+	%
+	% Init Molds
+	%
+	Set	    *Var0 	~Collider:itemPos_Mold1
+	ExecWait $Script_GetItemPosForCollider
+	Set		*Var3 .Item:CakePan
+	Call	DropItemEntity ( *Var3 *Var0 *Var1 *Var2 .ItemSpawnMode:Decoration .False )
+	Call 	$AddItemData ( .ItemType:Mold *Var0 *Var3 )
+	%
+	Set	    *Var0 	~Collider:itemPos_Mold2
+	ExecWait $Script_GetItemPosForCollider
+	Set		*Var3 .Item:CakePan
+	Call	DropItemEntity ( *Var3 *Var0 *Var1 *Var2 .ItemSpawnMode:Decoration .False )
+	Call 	$AddItemData ( .ItemType:Mold *Var0 *Var3 )
+	Return
+	End
+}
+
+#new:Script $Script_Stove_1 {
+	SetConst *VarA *MapVar[0] % stove's bool
+	SetConst *VarB *MapVar[1] % stove's itemIndex
+    Set *MapVar[2] ~Model:stove1  % stove's model groupID
+    SetConst *VarC *MapVar[2]
+	Exec $Script_Stove
+	Return
+	End
+}
+
+#new:Script $Script_Stove_2 {
+	SetConst *VarA *MapVar[3] % stove's bool
+	SetConst *VarB *MapVar[4] % stove's itemIndex
+    Set *MapVar[5] ~Model:stove2  % stove's model groupID
+    SetConst *VarC *MapVar[5]
+	Exec $Script_Stove
+	Return
+	End
+}
+
+% Possible orders for this level
+#new:Unknown $OrdersTable_lvl05
+{
+	.Item:CakeCream1Blue1 .Item:CakeCream1Blue1 .Item:CakeCream1Blue1 .Item:CakeCream1 .Item:CakeCream2
+}
+
+#new:Script $Script_DispatchNewOrders_Init
+{
+	Set		*Var4 $OrdersTable_lvl05
+	Set		*Var5 5
+	Exec	$Script_DispatchNewOrders
+	Return
+	End
+}
+
+% Hazards
+
+#new:Script $Script_UpdateHazards
+{
+    SetGroup 2
+    Wait    1
+    % Init
+    Call    ParentColliderToModel ( ~Collider:iceBlock_L1 ~Model:iceTop_L1 )
+    Call    ParentColliderToModel ( ~Collider:iceBlock_L2 ~Model:iceTop_L2 )
+    Call    ParentColliderToModel ( ~Collider:iceBlock_L3 ~Model:iceTop_L3 )
+    Call    ParentColliderToModel ( ~Collider:iceBlock_L4 ~Model:iceTop_L4 )
+    Call    ParentColliderToModel ( ~Collider:iceBlock_L5 ~Model:iceTop_L5 )
+    %
+    Call    ParentColliderToModel ( ~Collider:iceBlock_R1 ~Model:iceTop_R1 )
+    Call    ParentColliderToModel ( ~Collider:iceBlock_R2 ~Model:iceTop_R2 )
+    Call    ParentColliderToModel ( ~Collider:iceBlock_R3 ~Model:iceTop_R3 )
+    Call    ParentColliderToModel ( ~Collider:iceBlock_R4 ~Model:iceTop_R4 )
+    %
+    Call    SetNpcPos ( 1 ~Vec3d:iceStartPos_L1 )
+    Call    SetNpcPos ( 2 ~Vec3d:iceStartPos_L2 )
+    Call    SetNpcPos ( 3 ~Vec3d:iceStartPos_L3 )
+    Call    SetNpcPos ( 4 ~Vec3d:iceStartPos_L4 )
+    Call    SetNpcPos ( 5 ~Vec3d:iceStartPos_L5 )
+    %
+    Call    SetNpcPos ( 8 ~Vec3d:iceStartPos_R1 )
+    Call    SetNpcPos ( 9 ~Vec3d:iceStartPos_R2 )
+    Call    SetNpcPos ( A ~Vec3d:iceStartPos_R3 )
+    Call    SetNpcPos ( B ~Vec3d:iceStartPos_R4 )
+    Exec    $Script_UpdateNPCsPos_LeftSide
+    Exec    $Script_UpdateIcePos_LeftSide
+    Exec    $Script_UpdateNPCsPos_RightSide
+    Exec    $Script_UpdateIcePos_RightSide
+    Return
+    End
+}
+
+% Left side
+
+#new:IntTable $IceModelsIDs_LeftSide
+{
+    ~Model:iceBlock_L1 % group
+    ~Model:iceBody_L1 % body
+    ~Collider:iceBlock_L1 % collider
+    ~Model:iceBlock_L2
+    ~Model:iceBody_L2
+    ~Collider:iceBlock_L2
+    ~Model:iceBlock_L3
+    ~Model:iceBody_L3
+    ~Collider:iceBlock_L3
+    ~Model:iceBlock_L4
+    ~Model:iceBody_L4
+    ~Collider:iceBlock_L4
+    ~Model:iceBlock_L5
+    ~Model:iceBody_L5
+    ~Collider:iceBlock_L5
+    FFFFFFFF
+    FFFFFFFF
+    FFFFFFFF
+}
+
+#new:IntTable $NPCsIDs_LeftSide
+{
+    00000001
+    00000002
+    00000003
+    00000004
+    00000005
+    FFFFFFFF
+}
+
+% The models are actually attached to an invisible NPC that is moving through the water
+%
+% I used this method instead because when I tried to use GetModelCenter to update the models positions but I was getting a lot of problems.
+#new:Script $Script_UpdateNPCsPos_LeftSide
+{
+    UseIntBuffer $NPCsIDs_LeftSide
+    Loop
+        Get1Int *Var3
+        If *Var3 == -1
+            Wait    3
+            UseIntBuffer $NPCsIDs_LeftSide % reset buffer
+            Get1Int *Var3
+        EndIf
+        Call    GetNpcPos ( *Var3 *Var0 *Var1 *Var2 )
+        % Check if model reached the end
+        If *Var2 >= 295` % z
+            Call    SetNpcPos ( *Var3 ~Vec3d:iceStartPos_L5 ) % reset pos
+        Else
+            Add     *Var2 2 % z
+            Call    SetNpcPos ( *Var3 *Var0 *Var1 *Var2 )
+        EndIf
+    EndLoop
+    Return
+    End
+}
+
+% update the ice position according to the npc positions
+#new:Script $Script_UpdateIcePos_LeftSide
+{
+    UseIntBuffer $IceModelsIDs_LeftSide
+    Set *Var6 1 % npcID
+    Loop
+        Get3Int *Var3 *Var4 *Var5
+        If *Var3 == -1
+            Wait    3
+            UseIntBuffer $IceModelsIDs_LeftSide % reset buffer
+            Get3Int *Var3 *Var4 *Var5
+        EndIf
+        Call    GetNpcPos ( *Var6 *Var0 *Var1 *Var2 )
+        Call    TranslateGroup ( *Var3 *Var0 *Var1 *Var2 )
+        Call    UpdateColliderTransform ( *Var5 )
+        % check if the player is on top of this collision to update player's pos too
+        Call    $ReadAddress ( 8015A552 1 *Var0 .False .False ) % get colliderID from the collsion the player is on top rn
+        If *Var0 == *Var5 % player is on top of this ice
+            Call    GetPlayerPos ( *Var0 *Var1 *Var2 )
+            Add     *Var2 2 % z
+            Call    SetPlayerPos ( *Var0 *Var1 *Var2 )
+        EndIf
+        Add     *Var6 1
+        If *Var6 == 6
+            Set *Var6 1
+        EndIf
+    EndLoop
+    Return
+    End
+}
+
+% Right side
+
+#new:IntTable $IceModelsIDs_RightSide
+{
+    ~Model:iceBlock_R1 % group
+    ~Model:iceBody_R1 % body
+    ~Collider:iceBlock_R1 % collider
+    ~Model:iceBlock_R2
+    ~Model:iceBody_R2
+    ~Collider:iceBlock_R2
+    ~Model:iceBlock_R3
+    ~Model:iceBody_R3
+    ~Collider:iceBlock_R3
+    ~Model:iceBlock_R4
+    ~Model:iceBody_R4
+    ~Collider:iceBlock_R4
+    FFFFFFFF
+    FFFFFFFF
+    FFFFFFFF
+}
+
+#new:IntTable $NPCsIDs_RightSide
+{
+    00000008
+    00000009
+    0000000A
+    0000000B
+    FFFFFFFF
+}
+
+#new:Script $Script_UpdateNPCsPos_RightSide
+{
+    UseIntBuffer $NPCsIDs_RightSide
+    Loop
+        Get1Int *Var3
+        If *Var3 == -1
+            Wait    3
+            UseIntBuffer $NPCsIDs_RightSide % reset buffer
+            Get1Int *Var3
+        EndIf
+        Call    GetNpcPos ( *Var3 *Var0 *Var1 *Var2 )
+        % Check if model reached the end
+        If *Var2 <= -286` % z
+            Call    SetNpcPos ( *Var3 ~Vec3d:iceStartPos_R1 ) % reset pos
+        Else
+            Sub     *Var2 2 % z
+            Call    SetNpcPos ( *Var3 *Var0 *Var1 *Var2 )
+        EndIf
+    EndLoop
+    Return
+    End
+}
+
+#new:Script $Script_UpdateIcePos_RightSide
+{
+    UseIntBuffer $IceModelsIDs_RightSide
+    Set *Var6 8 % npcID
+    Loop
+        Get3Int *Var3 *Var4 *Var5
+        If *Var3 == -1
+            Wait    3
+            UseIntBuffer $IceModelsIDs_RightSide % reset buffer
+            Get3Int *Var3 *Var4 *Var5
+        EndIf
+        Call    GetNpcPos ( *Var6 *Var0 *Var1 *Var2 )
+        Call    TranslateGroup ( *Var3 *Var0 *Var1 *Var2 )
+        Call    UpdateColliderTransform ( *Var5 )
+        % check if the player is on top of this collision to update player's pos too
+        Call    $ReadAddress ( 8015A552 1 *Var0 .False .False ) % get colliderID from the collsion the player is on top rn
+        If *Var0 == *Var5 % player is on top of this ice
+            Call    GetPlayerPos ( *Var0 *Var1 *Var2 )
+            Sub     *Var2 2 % z
+            Call    SetPlayerPos ( *Var0 *Var1 *Var2 )
+        EndIf
+        Add     *Var6 1
+        If *Var6 == C
+            Set *Var6 8
+        EndIf
+    EndLoop
+    Return
+    End
+}
+
+%
+
+#new:Script $Script_EnterMap
+{
+	Return
+	End
+}
+
+#new:Script $Script_CreateExitTriggers
+{
+	Return
+	End
+}
+
+% Panners
+
+#new:Script $Script_TexturePan_Update
+{
+    SetGroup  00000000
+    If  *Var[5]  ==  00000001
+        If  *Var[6]  ==  00000001
+            If  *Var[7]  ==  00000001
+                If  *Var[8]  ==  00000001
+                    Call  $Function_TexturePan_Simple ( )
+                    Return
+                EndIf
+            EndIf
+        EndIf
+    EndIf
+    Call  $Function_TexturePan_Complex ( )
+    Return
+    End
+}
+
+#new:Function $Function_TexturePan_Simple
+{
+    ADDIU       SP, SP, FFE8
+    SW          S0, 10 (SP)
+    COPY        S0, A0
+    SW          RA, 14 (SP)
+    LW          V1, A8 (S0)
+    LW          V0, 88 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o30
+    SW          V1, A8 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .o40
+    ADDU        V0, V1, V0
+    .o30
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .o44
+    SUBU        V0, V1, A0
+    .o40
+    SW          V0, A8 (S0)
+    .o44
+    LW          V1, AC (S0)
+    LW          V0, 8C (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o64
+    SW          V1, AC (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .o74
+    ADDU        V0, V1, V0
+    .o64
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .o78
+    SUBU        V0, V1, A0
+    .o74
+    SW          V0, AC (S0)
+    .o78
+    LW          V1, B0 (S0)
+    LW          V0, 90 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o98
+    SW          V1, B0 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .oA8
+    ADDU        V0, V1, V0
+    .o98
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .oAC
+    SUBU        V0, V1, A0
+    .oA8
+    SW          V0, B0 (S0)
+    .oAC
+    LW          V1, B4 (S0)
+    LW          V0, 94 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .oCC
+    SW          V1, B4 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .oDC
+    ADDU        V0, V1, V0
+    .oCC
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .oE0
+    SUBU        V0, V1, A0
+    .oDC
+    SW          V0, B4 (S0)
+    .oE0
+    LW          A0, 84 (S0)
+    JAL         8011BC1C
+    LW          A1, A8 (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC34
+    LW          A1, AC (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC4C
+    LW          A1, B0 (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC64
+    LW          A1, B4 (S0)
+    LW          RA, 14 (SP)
+    LW          S0, 10 (SP)
+    CLEAR       V0
+    JR          RA
+    ADDIU       SP, SP, 18
+}
+
+#new:Function $Function_TexturePan_Complex
+{
+    ADDIU       SP, SP, FFE8
+    SW          S0, 10 (SP)
+    COPY        S0, A0
+    BEQ         A1, R0, .o24
+    SW          RA, 14 (SP)
+    SW          R0, 70 (S0)
+    SW          R0, 74 (S0)
+    SW          R0, 78 (S0)
+    SW          R0, 7C (S0)
+    .o24
+    LW          V0, 70 (S0)
+    BNE         V0, R0, .o64
+    NOP
+    LW          V1, A8 (S0)
+    LW          V0, 88 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o50
+    SW          V1, A8 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .o60
+    ADDU        V0, V1, V0
+    .o50
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .o64
+    SUBU        V0, V1, A0
+    .o60
+    SW          V0, A8 (S0)
+    .o64
+    LW          V0, 74 (S0)
+    BNE         V0, R0, .oA4
+    NOP
+    LW          V1, AC (S0)
+    LW          V0, 8C (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o90
+    SW          V1, AC (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .oA0
+    ADDU        V0, V1, V0
+    .o90
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .oA4
+    SUBU        V0, V1, A0
+    .oA0
+    SW          V0, AC (S0)
+    .oA4
+    LW          V0, 78 (S0)
+    BNE         V0, R0, .oE4
+    NOP
+    LW          V1, B0 (S0)
+    LW          V0, 90 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .oD0
+    SW          V1, B0 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .oE0
+    ADDU        V0, V1, V0
+    .oD0
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .oE4
+    SUBU        V0, V1, A0
+    .oE0
+    SW          V0, B0 (S0)
+    .oE4
+    LW          V0, 7C (S0)
+    BNE         V0, R0, .o124
+    NOP
+    LW          V1, B4 (S0)
+    LW          V0, 94 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o110
+    SW          V1, B4 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .o120
+    ADDU        V0, V1, V0
+    .o110
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .o124
+    SUBU        V0, V1, A0
+    .o120
+    SW          V0, B4 (S0)
+    .o124
+    LW          A0, 84 (S0)
+    JAL         8011BC1C
+    LW          A1, A8 (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC34
+    LW          A1, AC (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC4C
+    LW          A1, B0 (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC64
+    LW          A1, B4 (S0)
+    LW          V0, 70 (S0)
+    LW          V1, 78 (S0)
+    LW          A0, 98 (S0)
+    ADDIU       V0, V0, 1
+    SW          V0, 70 (S0)
+    LW          V0, 74 (S0)
+    ADDIU       V1, V1, 1
+    SW          V1, 78 (S0)
+    LW          V1, 70 (S0)
+    ADDIU       V0, V0, 1
+    SW          V0, 74 (S0)
+    LW          V0, 7C (S0)
+    SLT         V1, V1, A0
+    ADDIU       V0, V0, 1
+    BNE         V1, R0, .o198
+    SW          V0, 7C (S0)
+    SW          R0, 70 (S0)
+    .o198
+    LW          V0, 74 (S0)
+    LW          V1, 9C (S0)
+    SLT         V0, V0, V1
+    BEQL        V0, R0, .o1AC
+    SW          R0, 74 (S0)
+    .o1AC
+    LW          V0, 78 (S0)
+    LW          V1, A0 (S0)
+    SLT         V0, V0, V1
+    BEQL        V0, R0, .o1C0
+    SW          R0, 78 (S0)
+    .o1C0
+    LW          V0, 7C (S0)
+    LW          V1, A4 (S0)
+    SLT         V0, V0, V1
+    BEQL        V0, R0, .o1D4
+    SW          R0, 7C (S0)
+    .o1D4
+    LW          RA, 14 (SP)
+    LW          S0, 10 (SP)
+    CLEAR       V0
+    JR          RA
+    ADDIU       SP, SP, 18
+}
+
+#new:Script $Script_SetupTexturePan
+{
+	Call     802C9000 	( ~Model:band 0 )
+	Call     802C9000 	( ~Model:water 1 )
+	Thread
+		Set  *Var[0] 0
+		Set  *Var[1] 0
+		Set  *Var[2] FFFFFE92
+		Set  *Var[3] 0
+		Set  *Var[4] 0
+		Set  *Var[5] 0
+		Set  *Var[6] 0
+		Set  *Var[7] 0
+		Set  *Var[8] 0
+		Set  *Var[9] 0
+		Set  *Var[A] 0
+		Set  *Var[B] 0
+		Set  *Var[C] 0
+		Exec $Script_TexturePan_Update
+	EndThread
+	Thread
+		Set  *Var[0] 1
+		Set  *Var[1] FFFFFF88
+		Set  *Var[2] 3C
+		Set  *Var[3] FFFFFF88
+		Set  *Var[4] FFFFFF9C
+		Set  *Var[5] 1
+		Set  *Var[6] 1
+		Set  *Var[7] 1
+		Set  *Var[8] 1
+		Set  *Var[9] 0
+		Set  *Var[A] 0
+		Set  *Var[B] 0
+		Set  *Var[C] 0
+		Exec $Script_TexturePan_Update
+	EndThread
+	Thread
+		Set  *Var[0] 2
+		Set  *Var[1] 0
+		Set  *Var[2] FFFFFE70
+		Set  *Var[3] 0
+		Set  *Var[4] 0
+		Set  *Var[5] 1
+		Set  *Var[6] 0
+		Set  *Var[7] 0
+		Set  *Var[8] 0
+		Set  *Var[9] 0
+		Set  *Var[A] 0
+		Set  *Var[B] 0
+		Set  *Var[C] 0
+		Exec $Script_TexturePan_Update
+	EndThread
+	Return
+	End
+}

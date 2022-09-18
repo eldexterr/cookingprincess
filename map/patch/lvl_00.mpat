@@ -1,0 +1,184 @@
+#import CookingGame_Cursor.mpat
+#import CookingGame_Main.mpat
+
+#new:Header $Header
+{
+	[MainScript] $Script_Main
+	[Background] 80200000
+	[EntryList] $EntryList
+	[EntryCount] 1
+}
+
+#new:EntryList $EntryList
+{
+	~Vec4f:Entry0
+}
+
+#new:Script_Main $Script_Main
+{
+	%%%
+	% Init level
+	%%%
+	%
+	% set this level timer
+	% time is formated as HHMMSSMsMs
+	Call  $WriteAddress ( $Minigame_Data 2 00021E00 0 .False ) % 02:30
+	Exec  $Script_ClearMinigameData
+	Call  $WriteAddress ( 800740A2 0 1 .False .False ) % spawn as Peach
+	Call  DisablePlayerInput ( .True )
+	% generic
+	Call  FadeOutMusic  ( 00000000 000001F4 ) % stop music
+	Set   *GB_WorldLocation  .Location:Testing
+	Call  SetCamPerspective  ( .Cam:Default 00000003 00000019 00000010 00001000 )
+	Call  SetCamBGColor      ( .Cam:Default 00000000 00000000 00000000 )
+	Call  SetCamEnabled      ( .Cam:Default .True )
+	Call  SetCamLeadPlayer   ( .Cam:Default .False )
+	Exec  $Script_SetupMusic
+	Exec  $Script_EnterMap
+	%
+	% Minigame scripts
+	%
+	Set   *GameState 3 % cooking game - start
+    Exec  $Script_UpdateCursor
+    Exec  $Script_BindScripts_Special
+	Exec  $Script_InitItemEntities
+	Exec  $Script_DispatchNewOrders_Init
+	Return
+	End
+}
+
+#new:Function_Init $Function_Init
+{
+	PUSH    RA
+	LIA     A0, 800B0CF0
+	LIA     A1, "kkj_tex"
+	JAL     800654F0 % sprintf
+	RESERVED
+	CLEAR  V0
+	JPOP   RA
+}
+
+#new:Script $Script_SetupMusic
+{
+	Loop % wait until the game starts
+		If *GameState == 4 % cooking game - step
+			BreakLoop
+		EndIf
+		Wait	1
+	EndLoop
+	Call  SetMusicTrack ( 00000000 .Song:PeachsCastleParty 00000000 00000008 )
+	Call  ClearAmbientSounds ( 250` )
+	Return
+	End
+}
+
+#new:Script $Script_EnterMap
+{
+	Return
+	End
+}
+
+#new:Script $Script_CreateExitTriggers
+{
+	Return
+	End
+}
+
+#new:Script $Script_BindScripts_Special {
+	% Delivery Point
+	Bind     $Script_DeliveryPoint .Trigger:WallPressA ~Collider:delivery1 00000001 00000000
+	Bind     $Script_DeliveryPoint .Trigger:WallPressA ~Collider:delivery2 00000001 00000000
+	% Mix Points
+	Bind     $Script_MixPoint .Trigger:WallPressA ~Collider:mixer1 00000001 00000000
+	Bind     $Script_MixPoint .Trigger:WallPressA ~Collider:mixer2 00000001 00000000
+	Bind     $Script_MixPoint .Trigger:WallPressA ~Collider:mixer3 00000001 00000000
+	Bind     $Script_MixPoint .Trigger:WallPressA ~Collider:mixer4 00000001 00000000
+	% Trash can
+	Bind     $Script_TrashBin .Trigger:WallPressA ~Collider:trash1 00000001 00000000
+	Bind     $Script_TrashBin .Trigger:WallPressA ~Collider:trash2 00000001 00000000
+	% Stove
+	Bind     $Script_Stove_1 .Trigger:WallPressA ~Collider:stove1 00000001 00000000
+	Bind     $Script_Stove_1 .Trigger:WallPressA ~Collider:stove2 00000001 00000000
+	Bind     $Script_Stove_1 .Trigger:WallPressA ~Collider:stove3 00000001 00000000
+	% Cutting table
+	Bind     $Script_Cutting .Trigger:WallPressA ~Collider:cutting1 00000001 00000000
+	Bind     $Script_Cutting .Trigger:WallPressA ~Collider:cutting2 00000001 00000000
+	Bind     $Script_Cutting .Trigger:WallPressA ~Collider:cutting3 00000001 00000000
+	Bind     $Script_Cutting .Trigger:WallPressA ~Collider:cutting4 00000001 00000000
+	Bind     $Script_Cutting .Trigger:WallPressA ~Collider:cutting5 00000001 00000000
+	Bind     $Script_Cutting .Trigger:WallPressA ~Collider:cutting6 00000001 00000000
+	% Dispatchers
+    Bind     $Script_Dispatcher_Sugar .Trigger:WallPressA ~Collider:disp_sugar 00000001 00000000
+    Bind     $Script_Dispatcher_Egg .Trigger:WallPressA ~Collider:disp_egg 00000001 00000000
+    Bind     $Script_Dispatcher_CakeMix .Trigger:WallPressA ~Collider:disp_flour 00000001 00000000
+    %Bind     $Script_Dispatcher_Butter .Trigger:WallPressA ~Collider:disp_butter 00000001 00000000
+    Bind     $Script_Dispatcher_Cream .Trigger:WallPressA ~Collider:disp_cream 00000001 00000000
+    Bind     $Script_Dispatcher_Strawberry .Trigger:WallPressA ~Collider:disp_strawberry 00000001 00000000
+	Bind     $Script_Dispatcher_BlueBerry .Trigger:WallPressA ~Collider:disp_blue 00000001 00000000
+	Bind     $Script_Dispatcher_BubbleBerry .Trigger:WallPressA ~Collider:disp_bubble 00000001 00000000
+    Return
+    End
+}
+
+#new:Script $Script_InitItemEntities {
+	% Init Mix Bowls
+	Set	*Var0 	~Collider:itemPos_Bowl1
+	ExecWait $Script_GetItemPosForCollider
+	Set		*Var3 .Item:CakeBowl
+	Call	DropItemEntity ( *Var3 *Var0 *Var1 *Var2 .ItemSpawnMode:Decoration .False )
+	Call 	$AddItemData ( .ItemType:Bowl *Var0 *Var3 )
+	%
+	Set	*Var0 	~Collider:itemPos_Bowl2
+	ExecWait $Script_GetItemPosForCollider
+	Set		*Var3 .Item:CakeBowl
+	Call	DropItemEntity ( *Var3 *Var0 *Var1 *Var2 .ItemSpawnMode:Decoration .False )
+	Call 	$AddItemData ( .ItemType:Bowl *Var0 *Var3 )
+	%
+	% Init Molds
+	%
+	Set	*Var0 	~Collider:itemPos_Mold1
+	ExecWait $Script_GetItemPosForCollider
+	Set		*Var3 .Item:CakePan
+	Call	DropItemEntity ( *Var3 *Var0 *Var1 *Var2 .ItemSpawnMode:Decoration .False )
+	Call 	$AddItemData ( .ItemType:Mold *Var0 *Var3 )
+	%
+	Set	*Var0 	~Collider:itemPos_Mold2
+	ExecWait $Script_GetItemPosForCollider
+	Set		*Var3 .Item:CakePan
+	Call	DropItemEntity ( *Var3 *Var0 *Var1 *Var2 .ItemSpawnMode:Decoration .False )
+	Call 	$AddItemData ( .ItemType:Mold *Var0 *Var3 )
+	Return
+	End
+}
+
+% Stove
+
+#new:Script $Script_Stove_1 {
+	SetConst *VarA *MapVar[0] % stove's bool
+	SetConst *VarB *MapVar[1] % stove's itemIndex
+	Exec $Script_Stove
+	Return
+	End
+}
+
+/% Butter got scrapped from the game
+#new:Script $Script_Dispatcher_Butter {
+	Set	*Var0 .Item:BakingButter
+	Exec $Script_GiveItem
+    Return
+    End
+}%/
+
+#new:Unknown $OrdersTable_lvl00
+{
+	.Item:CakeCream1Straw1 .Item:CakeCream1Straw1 .Item:CakeCream1Straw1 .Item:CakeCream1
+}
+
+#new:Script $Script_DispatchNewOrders_Init
+{
+	Set		*Var4 $OrdersTable_lvl00
+	Set		*Var5 4
+	Exec	$Script_DispatchNewOrders
+	Return
+	End
+}

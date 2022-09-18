@@ -1,0 +1,854 @@
+% Add more data for each itemEntity in the game
+
+% Hold Peach's current item data
+#export:Data $PeachStatus
+{
+    00b % 0x00 % itemTypeIndex, for item peach is holding rn
+    00b % 0x01 % itemIndex
+    0000s % 0x02 % itemID
+
+    0000s % 0x04 % subItemID1
+    0000s % 0x06 % subItemID2
+    0000s % 0x08 % subItemID3
+
+    0000s % unused
+}
+
+#export .ItemType:None 0
+#export .ItemType:Ingredient 1
+#export .ItemType:Bowl 2
+#export .ItemType:BowlMixed 3
+#export .ItemType:Mold 4
+#export .ItemType:MoldCooked 5
+#export .ItemType:Base 6 % scrapped
+#export .ItemType:BaseWCake 7
+#export .ItemType:Decoration 8
+#export .ItemType:Cuttable 9
+#export .ItemType:Mistake 10`
+
+% Only 20 items entities can be on the same map
+#export:Data $ItemsData
+{
+    % New kind of data:
+    % 0x00 % typeOfItemID
+    % 0x02 % itemIndex
+    % 0x04 % itemID
+    % 0x06 % itemTimer
+    %
+    % 0x08 % subItem1_ID
+    % 0x0A % subItem2_ID
+    % 0x0C % subItem3_ID
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item1_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item2_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item3_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item4_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item5_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item6_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item7_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item8_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item9_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item10_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item11_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item12_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item13_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item14_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item15_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item16_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item17_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item18_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item19_data
+    FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs FFFFs % item20_data
+}
+
+% Call    $GetItemSlotsFree ( *out )
+%
+% -1 = Zero item slots are free
+#export:Function $GetItemSlotsFree
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1
+    JAL     $get_item_slots_free
+    NOP
+    COPY    A2, V0
+    LW      A1, C (A0) % go to arguments
+    JAL     ~Func:set_variable
+    LW      A1, 0 (A1) % get arg0
+    POP     RA, A0, A1, A2, A3, V0, V1
+    JR      RA
+    ORI     V0, R0, 2
+}
+
+% Returns a -1 if zero items slots are free
+#export:Function $get_item_slots_free
+{
+    PUSH    RA, A0, A1, A2, A3, V1
+    LIO     A0, $ItemsData
+    ORI     V0, R0, 14` % because each item uses 14 bytes
+    ORI     V1, R0, 20` % because only 20 can be on the same map
+    MULT    V0, V1
+    MFLO    V0
+    ADDU    V0, A0, V0 % V0 = End of the table
+    CLEAR   A2
+    .Loop
+    LH      A1, 0 (A0) % get next itemID
+    BLTZL   A1, .Add1
+    ADDIU   A2, A2, 1
+    .Add1
+    ADDIU   A0, A0, 14` % move offset (because each item uses 14 bytes)
+    BNE     A0, V0, .Loop
+    NOP
+    BEQL    A2, R0, .End
+    ADDI    A2, R0, -1
+    .End
+    COPY    V0, A2
+    POP     RA, A0, A1, A2, A3, V1
+    JR      RA
+    NOP
+}
+
+% Call    $AddItemData ( itemType itemIndex itemID )
+%
+% Add item data to the next available slot from $ItemsData
+#export:Function $AddItemData
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S0, S1, S2
+    COPY    S0, A0
+    LW      A1, C (S0)
+    JAL     ~Func:get_variable
+    LW      A1, 0 (A1) % load arg0
+    COPY    S1, V0
+    LW      A1, C (S0)
+    JAL     ~Func:get_variable
+    LW      A1, 4 (A1) % load arg1
+    COPY    S2, V0
+    LW      A1, C (S0)
+    JAL     ~Func:get_variable
+    LW      A1, 8 (A1) % load arg2
+    % S1=itemType
+    % S2=itemIndex
+    % V0=itemID
+    COPY    A0, S1
+    COPY    A1, S2
+    JAL     $add_item_data
+    COPY    A2, V0
+    POP     RA, A0, A1, A2, A3, V0, V1, S0, S1, S2
+    JR      RA
+    ORI     V0, R0, 2
+}
+
+% Add item data to the next available slot from $ItemsData
+%
+% A0=itemType
+%
+% A1=itemIndex
+%
+% A2=itemID
+%
+% Returns the itemIndex from $ItemsData from the item saved
+%
+% Returns -1 if nothing was saved because there's no more data available
+#export:Function $add_item_data
+{
+    PUSH    T0, T1, T2
+    % look for next available slot
+    LIO     T0, $ItemsData
+    CLEAR   T1
+    .Loop
+    LH      T2, 0 (T0)
+    ADDIU   T1, T1, 1
+    SLTIU   V0, T1, 21` % because the item cap is 20
+    BEQL    V0, R0, .End
+    ADDI    V0, R0, -1
+    BGTZL   T2, .Loop
+    ADDIU   T0, T0, 14` % because each item uses 14 bytes of data
+    % free slot found, save data
+    %
+    % A0=itemType
+    % A1=itemIndex
+    % A2=itemID
+    % T0=itemData*
+    SH      A0, 0 (T0) % itemType
+    SH      A1, 2 (T0) % itemIndex
+    SH      A2, 4 (T0) % itemID
+    COPY    V0, T1
+    .End
+    POP     T0, T1, T2
+    JR      RA
+    NOP
+}
+
+% Call    $DeleteItemData ( itemIndex )
+%
+% [!] writes in var0
+%
+% Delete item data from $ItemsData and itemEntity
+%
+% Saves in var0 the itemIndex from $ItemsData from
+% the item deleted, -1 if wasn't found
+#export:Function $DeleteItemData
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S0, S1, S2
+    COPY    S0, A0
+    LW      A1, C (S0)
+    JAL     ~Func:get_variable
+    LW      A1, 0 (A1) % get arg0
+    COPY    S1, V0
+    JAL     $delete_item_data
+    COPY    A0, V0
+    BLTZ    V0, .BreakLoop % item wasn't found
+    NOP
+    % remove itemEntity
+    JAL     ~Func:remove_item_entity_by_index
+    COPY    A0, S1
+    COPY    A2, S2 % restore A2
+    .BreakLoop
+    LIO     A1, *Var0
+    JAL     ~Func:set_variable
+    COPY    A0, S0
+    POP     RA, A0, A1, A2, A3, V0, V1, S0, S1, S2
+    JR      RA
+    ORI     V0, R0, 2
+}
+
+% A0 = itemIndex
+%
+% Delete extra item data
+%
+% Returns -1 if data wasn't found
+#export:Function $delete_item_data
+{
+    PUSH    RA, A0, A1, A2, A3, V1
+    COPY    V0, A0
+    % V0 = itemIndex to delete
+    LIO     A0, $ItemsData
+    ORI     A2, R0, 1
+    ORI     A3, R0, 20` % because the cap is 20 items
+    .Loop
+    LHU     A1, 2 (A0) % get this item's itemIndex
+    ADDIU   A0, A0, 14` % because each item uses 14 bytes
+    % this one is the last item?
+    BEQL    A2, A3, .BreakLoop
+    ADDI    A2, R0, -1 % item not found
+    BNEL    A1, V0, .Loop
+    ADDIU   A2, A2, 1
+    % item was found, delete data
+    ADDI    V0, R0, -1 % fill everything with FF
+    ADDI    A0, A0, -14` % go back an item slot, wasn't neccesary to read the next item data
+    CLEAR   A1
+    ORI     A3, R0, 14` % delete 14 bytes
+    .Loop_Clear
+    SB      V0, 0 (A0)
+    ADDIU   A1, A1, 1
+    BNE     A1, A3, .Loop_Clear
+    ADDIU   A0, A0, 1
+    CLEAR   V0
+    .BreakLoop
+    POP     RA, A0, A1, A2, A3, V1
+    JR      RA
+    NOP
+}
+
+% A0 = itemIndex
+%
+% Delete an item subItems data
+%
+% Returns -1 if data wasn't found
+#export:Function $delete_item_subItemData
+{
+    PUSH    RA, A0, A1, A2, A3, V1
+    COPY    V0, A0
+    % V0 = itemIndex to delete
+    LIO     A0, $ItemsData
+    ORI     A2, R0, 1
+    ORI     A3, R0, 20` % because the cap is 20 items
+    .Loop
+    LHU     A1, 2 (A0) % get this item's itemIndex
+    ADDIU   A0, A0, 14` % because each item uses 14 bytes
+    % this one is the last item?
+    BEQL    A2, A3, .End
+    ADDI    A2, R0, -1 % item not found
+    BNEL    A1, V0, .Loop
+    ADDIU   A2, A2, 1
+    % item was found, delete data
+    ADDI    A0, A0, -14` % don't use next item data
+    ADDI    V0, R0, -1 % fill everything with FF
+    SH      V0, 8 (A0) % subItem1_ID
+    SH      V0, A (A0) % subItem2_ID
+    SH      V0, C (A0) % subItem3_ID
+    .End
+    POP     RA, A0, A1, A2, A3, V1
+    JR      RA
+    NOP
+}
+
+% A0 = itemIndex_A
+%
+% A1 = itemIndex_B
+%
+% Copy an item's subData to another item
+%
+% Returns -1 if data wasn't found
+#export:Function $copy_item_subItemData
+{
+    PUSH    RA, A0, A1, A2, A3, V1
+    COPY    V0, A0
+    % V0 = itemIndex to delete
+    LIO     A0, $ItemsData
+    ORI     A2, R0, 1
+    ORI     A3, R0, 20` % because the cap is 20 items
+    .Loop
+    LHU     A1, 2 (A0) % get this item's itemIndex
+    ADDIU   A0, A0, 14` % because each item uses 14 bytes
+    % this one is the last item?
+    BEQL    A2, A3, .End
+    ADDI    A2, R0, -1 % item not found
+    BNEL    A1, V0, .Loop
+    ADDIU   A2, A2, 1
+    %=====================================
+    % item_A was found, search for item_B
+    %=====================================
+    COPY    V1, A0
+    % V0 = itemIndex to delete
+    LIO     A0, $ItemsData
+    ORI     A2, R0, 1
+    ORI     A3, R0, 20` % because the cap is 20 items
+    .Loop_2
+    LHU     A1, 2 (A0) % get this item's itemIndex
+    ADDIU   A0, A0, 14` % because each item uses 14 bytes
+    % this one is the last item?
+    BEQL    A2, A3, .End
+    ADDI    A2, R0, -1 % item not found
+    BNEL    A1, V0, .Loop_2
+    ADDIU   A2, A2, 1
+    % item_2 found, copy subItem data from A to B
+    ADDI    V0, R0, -1 % fill everything with FF
+    LH      V0, 8 (V1) % subItem1_ID
+    SH      V0, 8 (A0)
+    LH      V0, A (V1) % subItem2_ID
+    SH      V0, A (A0)
+    LH      V0, C (V1) % subItem3_ID
+    SH      V0, C (A0)
+    .End
+    POP     RA, A0, A1, A2, A3, V1
+    JR      RA
+    NOP
+}
+
+% delete all data from `$ItemsData`
+#export:Function $DeleteEntireItemData
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1
+    LIO     A0, $ItemsData
+    ORI     A1, R0, 14` % delete 14 bytes of data for each item
+    ORI     A2, R0, 20` % because $ItemsData holds the data for 20 items
+    ADDI    A3, R0, -1 % fill everything with FF
+    CLEAR   T0
+    CLEAR   T1
+    .Loop
+    SB      A3, 0 (A0)
+    ADDIU   T0, T0, 1
+    BNE     T0, A1, .Loop
+    ADDIU   A0, A0, 1
+    % clear next item
+    ADDIU   T1, T1, 1
+    BNE     T1, A2, .Loop
+    CLEAR   T0
+    POP     RA, A0, A1, A2, A3, V0, V1
+    JR      RA
+    NOP
+}
+
+% Call  $SetPeachItem ( itemIndex itemID itemType )
+%
+% Replace Peach's item data with a new item
+%
+% Type of items:
+%
+% 01 = Ingredient
+%
+% 02 = Mix bowl
+%
+% 03 = Mix bowl (already mixed)
+%
+% 04 = cake mold
+%
+% 05 = cake mold (already cooked)
+%
+% 06 = Base
+%
+% 07 = Base w/cake
+%
+% 08 = Decoration
+#export:Function $SetPeachItem
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S0, S1, S2
+    COPY    S0, A0
+    LW      A1, C (S0)
+    JAL     ~Func:get_variable
+    LW      A1, 0 (A1) % get arg0
+    COPY    S1, V0
+    %
+    LW      A1, C (S0)
+    JAL     ~Func:get_variable
+    LW      A1, 4 (A1) % get arg1
+    COPY    S2, V0
+    %
+    LW      A1, C (S0)
+    JAL     ~Func:get_variable
+    LW      A1, 8 (A1) % get arg2
+    % S1=itemIndex
+    % S2=itemID
+    % V0=itemType
+    COPY    A0, S1
+    COPY    A1, S2
+    JAL     $set_peach_item
+    COPY    A2, V0
+    POP     RA, A0, A1, A2, A3, V0, V1, S0, S1, S2
+    JR      RA
+    ORI     V0, R0, 2
+}
+
+% A0=itemIndex
+%
+% A1=itemID
+%
+% A2=itemType
+#export:Function $set_peach_item
+{
+    PUSH    A0, A1, A2, A3, V0, V1
+    % set Peach animations
+    ORI     V0, R0, 1
+    SAB     V0, 800740A4 % use the carrying item animations
+    LAW     V1, 8010F080 % getPlayerAnimation
+    LIO     V0, 000A0001 % Peach Idle animation
+    LIO     A3, 000A0007 % Peach "Carrying Item" Idle animation
+    BEQ     V0, V1, .WriteAnimation
+    RESERVED
+    LIO     A3, 000A002B % Peach "Carrying Item" running animation
+    .WriteAnimation
+    SAW     A3, 8010F080 % SetPlayerAnimation
+    %
+    LIO     A3, $PeachStatus
+    SB      A2, 0 (A3) % itemTypeIndex
+    SB      A0, 1 (A3) % itemIndex
+    SH      A1, 2 (A3) % itemID
+    % clear last bytes from $PeachStatus
+    SW      R0, 4 (A3)
+    SW      R0, 8 (A3)
+    POP     A0, A1, A2, A3, V0, V1
+    JR      RA
+    NOP
+}
+
+% clear $PeachStatus and also clear the "holding item" byte
+%
+% to stop peach from doing the "carrying item" animations.
+#export:Function $clear_peach_status
+{
+    PUSH    A0, A1, A2
+    SAB     R0, 800740A4 % carrying item byte
+    % set animation
+    LAW     A0, 8010F080 % getPlayerAnimation
+    LIO     A2, 000A0007 % Peach "Carrying Item" Idle animation
+    LIO     A1, 000A0001 % Peach Idle animation
+    BEQ     A0, A2, .WriteAnimation
+    RESERVED
+    LIO     A1, 000A0003 % Peach running animation
+    .WriteAnimation
+    SAW     A1, 8010F080 % SetPlayerAnimation
+    LIO     A0, $PeachStatus
+    SW      R0, 0 (A0) % clear first 4 bytes
+    SW      R0, 4 (A0)
+    SW      R0, 8 (A0) % clear last 4 bytes 
+    POP     A0, A1, A2
+    JR      RA
+    NOP
+}
+
+% Call  $GetSubItemsPeach ( *subItem1, *subItem2, *subItem3 )
+%
+% Get current subItemsIDs from the item Peach's is carrying right now
+#export:Function $GetSubItemsPeach
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S0, S1
+    COPY    S0, A0
+    LIO     S1, $PeachStatus
+    %
+    LW      A1, C (S0)
+    LHU     A2, 4 (S1) % subItemID1
+    JAL     ~func:set_variable
+    LW      A1, 0 (A1) % get arg0
+    %
+    COPY    A0, S0
+    LW      A1, C (S0)
+    LHU     A2, 6 (S1) % subItemID2
+    JAL     ~func:set_variable
+    LW      A1, 4 (A1) % get arg1
+    %
+    COPY    A0, S0
+    LW      A1, C (S0)
+    LHU     A2, 8 (S1) % subItemID3
+    JAL     ~func:set_variable
+    LW      A1, 8 (A1) % get arg2
+    POP     RA, A0, A1, A2, A3, V0, V1, S0, S1
+    JR      RA
+    ORI     V0, R0, 2
+}
+
+% Clear subItemData from $PeachStatus and from the item peach is carrying right now.
+#export:Function $clear_peachsItem_subItemData
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1
+    LIO     A0, $PeachStatus
+    LBU     A1, 1 (A0) % itemIndex
+    % clear peach's item sub data
+    JAL     $get_item_data
+    COPY    A0, A1
+    ADDI    A2, R0, -1
+    SH      A2, 8 (V0) % subItem1_ID
+    SH      A2, A (V0) % subItem2_ID
+    SH      A2, C (V0) % subItem3_ID
+    POP     RA, A0, A1, A2, A3, V0, V1
+    JR      RA
+    NOP
+}
+
+% A0 = itemIndex
+%
+% A1 = itemID
+%
+% Returns a bool if more items could be added or not.
+#export:Function $add_subItem
+{
+    PUSH    RA, A0, A1, A2, A3, V1
+    JAL     $get_item_data
+    CLEAR   V1
+    ADDIU   A0, V0, 8 % start reading from subItem data
+    .CheckNextSlot
+    LH      A2, 0 (A0)
+    ADDI    V1, V1, 1
+    SLTI    V0, V1, 4 % because subItem cap is 3
+    BEQ     V0, R0, .End
+    CLEAR   V0
+    BGEZL   A2, .CheckNextSlot
+    ADDIU   A0, A0, 2 % read next slot
+    % available sub item slot found
+    SH      A1, 0 (A0)
+    ORI     V0, R0, 1
+    .End
+    POP     RA, A0, A1, A2, A3, V1
+    JR      RA
+    NOP
+}
+
+% Call	$AddFrames_ItemTimer ( itemIndex amount )
+%
+% [!] Writes in var0, saves in var0 the final amount
+%
+% Aument or decrease an item's timer (itemData(0x06))
+#export:Function $AddFrames_ItemTimer
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S0, S1, S2
+    COPY    S0, A0
+    % get arg0
+    LW      A1, C (S0)
+    JAL     ~func:get_variable
+    LW      A1, 0 (A1) % arg0
+    COPY    S1, V0
+    % get arg1
+    COPY    A0, S0
+    LW      A1, C (S0)
+    JAL     ~func:get_variable
+    LW      A1, 4 (A1) % arg1
+    COPY    S2, V0
+    % S1=itemIndex
+    % S2=amountToAdd
+    JAL     $get_item_data
+    COPY    A0, S1
+    BEQ     V0, R0 .End % this item doesn't exits
+    NOP
+    LH      A0, 6 (V0) % itemTimer
+    ADD     A0, A0, S2
+    SH      A0, 6 (V0) % save new timer
+    COPY    A2, A0
+    LIO     A1, *Var0
+    JAL     ~Func:set_variable
+    COPY    A0, S0
+    .End
+    POP     RA, A0, A1, A2, A3, V0, V1, S0, S1, S2
+    JR      RA
+    ORI     V0, R0, 2
+}
+
+% Call    $GetItemData ( itemIndex out )
+%
+% Get item's data from $ItemsData
+%
+% Gives a -1 if item wasn't found
+#export:Function $GetItemData
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S0
+    % get arg0
+    COPY    S0, A0
+    LW      A1, C (S0)
+    JAL     ~Func:get_variable
+    LW      A1, 0 (A1) % arg0
+    JAL     $get_item_data
+    COPY    A0, V0
+    % Set var
+    COPY    A0, S0
+    COPY    A2, V0
+    LW      A1, C (S0)
+    JAL     ~Func:set_variable
+    LW      A1, 4 (A1) % get arg1
+    POP     RA, A0, A1, A2, A3, V0, V1, S0
+    JR      RA
+    ORI     V0, R0, 2
+}
+
+% Call    $GetItemDataPeach ( out )
+%
+% Get the item data from the item peach is holding right now
+%
+% Gives a -1 if item wasn't found
+#export:Function $GetItemDataPeach
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S0
+    COPY    S0, A0
+    LIO     A0, $PeachStatus
+    JAL     $get_item_data
+    LBU     A0, 1 (A0) % get itemIndex
+    COPY    A0, S0
+    LW      A1, C (S0)
+    LW      A1, 0 (A1) % get arg0
+    JAL     ~Func:set_variable
+    COPY    A2, V0
+    POP     RA, A0, A1, A2, A3, V0, V1, S0
+    JR      RA
+    ORI     V0, R0, 2
+}
+
+% Call  $ReplaceItem ( itemIndex_old itemID_new itemType_new *out_itemIndex_new )
+%
+% Remove an item and spawn a new one, replace the new one data with the one from the old one.
+#export:Function $ReplaceItem
+{
+    PUSH    RA, A0, A1, A2, A3, V0, V1, S0, S1, S2, S3
+    COPY    S0, A0
+    LW      A1, C (S0)
+    JAL     ~Func:get_variable
+    LW      A1, 0 (A1) % get arg0
+    COPY    S1, V0
+    %
+    COPY    A0, S0
+    LW      A1, C (S0)
+    JAL     ~Func:get_variable
+    LW      A1, 4 (A1) % get arg1
+    COPY    S2, V0
+    %
+    COPY    A0, S0
+    LW      A1, C (S0)
+    JAL     ~Func:get_variable
+    LW      A1, 8 (A1) % get arg2
+    COPY    S3, V0
+    COPY    A0, S1 % itemIndex_old
+    COPY    A1, S2 % itemID_new
+    JAL     $replace_item
+    COPY    A2, S3 % itemType_new
+    % set variable
+    COPY    A0, S0
+    COPY    A2, V0
+    LW      A1, C (S0)
+    JAL     ~Func:set_variable
+    LW      A1, C (A1) % load arg3
+    POP     RA, A0, A1, A2, A3, V0, V1, S0, S1, S2, S3
+    JR      RA
+    ORI     V0, R0, 2
+}
+
+% A0=itemIndex_old
+%
+% A1=itemID_new
+%
+% A2=itemType_new
+%
+% -
+%
+% out=newItemIndex
+%
+% Remove an item and spawn a new one, replace the new one data with the one from the old one.
+#export:Function $replace_item
+{
+    PUSH    R0, R0, R0, RA, A0, A1, A2, A3, V1, S1, S2, S3, S4, T1, F4
+    COPY    S1, A0 % itemIndex_old
+    COPY    S2, A1 % itemID_new
+    COPY    S3, A2 % itemType_new
+    % get old item pos
+    JAL     ~Func:get_item_entity
+    COPY    A0, S1
+    % save item pos in sp(10/14/18)
+    LWC1	F4, 8 (V0) % item posX
+    SWC1    F4, 10 (SP)
+    LWC1	F4, C (V0) % item posY
+    SWC1    F4, 14 (SP)
+    LWC1	F4, 10 (V0) % item posZ
+    SWC1    F4, 18 (SP)
+    % spawn new item
+    LWC1    F4, 10 (SP) % x
+    MFC1    A1, F4
+    LWC1    F4, 14 (SP) % y
+    MFC1    A2, F4
+    LWC1    F4, 18 (SP) % z
+    MFC1    A3, F4
+    ORI     V0, R0, 1 % .ItemSpawnMode:Decoration
+    SW      V0, 10 (SP) % itemSpawnMode
+    SW      R0, 14 (SP) % pickupVar
+    JAL     ~Func:make_item_entity_nodelay
+    COPY    A0, S2 % itemID
+    COPY    S4, V0 % newItemIndex
+    JAL     $get_item_data
+    COPY    A0, S1 % get old item extra data
+    SH      S3, 0 (V0) % itemType
+    SH      S4, 2 (V0) % itemIndex
+    SH      S2, 4 (V0) % itemID
+    % update $PeachStatus if peach was holding the old item
+    LIO     A0, $PeachStatus
+    % peach was even holding an items?
+    LBU     A1, 0 (A0) % itemTypeIndex
+    BEQ     A1, R0, .RemoveOldItem
+    LBU     A1, 1 (A0) % itemIndex
+    BEQL    A1, S1, .RemoveOldItem
+    SB      S4, 1 (A0) % update Peach's itemIndex
+    .RemoveOldItem
+    % remove old item
+    JAL     ~Func:remove_item_entity_by_index
+    COPY    A0, S1
+    COPY    V0, S4 % newItemIndex
+    POP     R0, R0, R0, RA, A0, A1, A2, A3, V1, S1, S2, S3, S4, T1, F4
+    JR      RA
+    NOP
+}
+
+% A0 = itemIndex
+%
+% *out = itemData
+%
+% Get item's data from $ItemsData
+%
+% Returns a zero if item wasn't found
+#export:Function $get_item_data
+{
+    PUSH    RA, A0, A1, A2, A3, V1
+    % V0=itemIndex
+    COPY    V0, A0
+    LIO     A0, $ItemsData
+    CLEAR   A2
+    ORI     A3, R0, 20` % because the cap is 20 items
+    .Loop
+    LH      A1, 2 (A0) % get this item's itemIndex
+    ADDIU   A0, A0, 14` % because each item uses 14 bytes
+    % this one is the last item?
+    BEQL    A2, A3, .End
+    CLEAR   V0 % item not found
+    BNEL    A1, V0, .Loop
+    ADDIU   A2, A2, 1
+    % item was found
+    ADDI    V0, A0, -14` % go back an item slot, wasn't neccesary to read the next item data
+    .End
+    POP     RA, A0, A1, A2, A3, V1
+    JR      RA
+    NOP
+}
+
+% Call      GetColliderItem ( colliderID itemIndex* )
+%
+% check if a collider has an item attach it to it
+%
+% *out = itemIndex
+%
+% returns a -1 if nothing was found
+#export:Function $GetColliderItem
+{
+    PUSH    R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, S0
+    COPY    S0, A0
+    LW      A1, C (A0)
+    JAL     ~Func:get_variable
+    LW      A1, 0 (A1) % get arg0
+    JAL     $get_collider_possibleItemPos
+    COPY    A0, V0
+    LW      A0, 10 (SP) % x
+    LW      A1, 14 (SP) % y
+    JAL     $search_item_at_this_pos
+    LW      A2, 18 (SP) % z
+    % set var
+    COPY    A0, S0
+    LW      A1, C (S0)
+    LW      A1, 4 (A1)
+    JAL     ~Func:set_variable
+    COPY    A2, V0
+    POP     R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, S0
+    JR      RA
+    ORI     V0, R0, 2
+}
+
+% A0=itemIndex
+%
+% A1=colliderID
+%
+% set an itemPos the same as how it should have if is placed in a collision in specific
+#export:Function $UpdateItemColliderTrasform
+{
+    PUSH    R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, F4, F6, F8, S0
+    COPY    S0, A0
+    % get arg0
+    LW      A1, C (S0)
+    JAL     ~Func:get_variable
+    LW      A1, 4 (A1)
+    JAL     $get_collider_possibleItemPos
+    COPY    A0, V0
+    % get arg1
+    COPY    A0, S0
+    LW      A1, C (S0)
+    JAL     ~Func:get_variable
+    LW      A1, 0 (A1)
+    JAL     ~Func:get_item_entity
+    COPY    A0, V0
+    % get collider pos
+    LWC1    F4, 10 (SP) % x
+    LWC1    F6, 14 (SP) % y
+    LWC1    F8, 18 (SP) % z
+    % update item pos
+    SWC1	F4, 8 (V0) % item posX
+    SWC1	F6, C (V0) % item posY
+    SWC1	F8, 10 (V0) % item posZ
+    POP     R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, F4, F6, F8, S0
+    JR      RA
+    ORI     V0, R0, 2
+}
+
+% Pause the game if there's too many items in the map
+%
+% Var2 = amount of items slot free
+#export:Script:Map $Script_CheckItemCap {
+    Call    $GetItemSlotsFree ( *Var2 )
+	If *Var2 == -1
+		Call 	$WriteAddress ( $PauseByte 0 .True .False .False ) % pause timers
+		Call	DisablePlayerInput ( .True )
+		SetGroup 0
+		SuspendAll 2
+		Call	ShowMessageAtScreenPos ( $String_TooManyItems A0 28 )
+		Call 	$WriteAddress ( $PauseByte 0 .False .False .False ) % unpause timers
+		ResumeAll 2
+		Call	DisablePlayerInput ( .False )
+	EndIf
+    Return
+    End
+}
+
+#string $String_TooManyItems
+{
+[Style Inspect][DelayOff]
+Looks like too many items are[BR]
+loaded try [SaveColor][Color:07]tossing[RestoreColor] a few into the[BR]
+[SaveColor][Color:07]trash bin[RestoreColor].
+[Wait][End]
+}

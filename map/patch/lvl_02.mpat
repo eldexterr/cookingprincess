@@ -1,0 +1,697 @@
+#import CookingGame_Cursor.mpat
+#import CookingGame_Main.mpat
+
+#define .NpcID:Toad_0   A
+#define .NpcID:Toad_1   B
+#define .NpcID:Toad_2   C
+#define .NpcID:Toad_3   D
+#define .NpcID:Toad_4   E
+#define .NpcID:Toad_5   F
+
+#new:Header $Header
+{
+	[MainScript] $Script_Main
+	[Background] 80200000
+	[EntryList] $EntryList
+	[EntryCount] 1
+}
+
+#new:EntryList $EntryList
+{
+	~Vec4f:Entry0
+}
+
+#new:Function_Init $Function_Init
+{
+	PUSH    RA
+	LIA     A0, 800B0CF0
+	LIA     A1, "mac_tex"
+	JAL     800654F0 % sprintf
+	RESERVED
+	CLEAR  V0
+	JPOP   RA
+}
+
+#new:Script_Main $Script_Main
+{
+	%%%
+	% Init level
+	%%%
+	%
+	% set this level timer
+	% time is formated as HHMMSSMsMs
+	Call  $WriteAddress ( $Minigame_Data 2 00050000 0 .False ) % 05:00
+	Exec  $Script_ClearMinigameData
+	Call  $WriteAddress ( 800740A2 0 1 .False .False ) % spawn as Peach
+	Call  DisablePlayerInput ( .True )
+    Call  SetCamSpeed ( .Cam:Default *Fixed[3.0] )
+    If *CameraMode == .False
+        Call    SetZoneEnabled ( 2 .False )
+    Else
+        Call    SetZoneEnabled ( 0 .False )
+        Call    SetZoneEnabled ( 1 .False )
+    EndIf
+	% generic
+	Call  FadeOutMusic  ( 00000000 000001F4 ) % stop music
+	Set   *GB_WorldLocation  .Location:Testing
+	Call  SetCamPerspective  ( .Cam:Default 00000003 00000019 00000010 00001000 )
+	Call  SetCamBGColor      ( .Cam:Default 00000000 00000000 00000000 )
+	Call  SetCamEnabled      ( .Cam:Default .True )
+	Call  SetCamLeadPlayer   ( .Cam:Default .False )
+	Exec  $Script_EnterMap
+    Exec  $Script_SetupTexturePan
+    Call  MakeNpcs ( .False $NpcGroupList_lvl02 )
+    %
+	% Minigame scripts
+	%
+	Set   *GameState 3 % cooking game - start
+    Exec  $Script_SetupMusic
+    Exec  $Script_UpdateCursor
+    Exec  $Script_BindScripts_Special
+	Exec  $Script_InitItemEntities
+	Exec  $Script_DispatchNewOrders_Init
+	Return
+	End
+}
+
+#new:Script $Script_SetupMusic
+{
+	Loop % wait until the game starts
+		If *GameState == 4 % cooking game - step
+			BreakLoop
+		EndIf
+		Wait	1
+	EndLoop
+	Call  SetMusicTrack ( 00000000 .Song:ToadTown 00000000 00000008 )
+	Call  ClearAmbientSounds ( 250` )
+	Return
+	End
+}
+
+% NPCs
+
+#new:NpcGroupList $NpcGroupList_lvl02
+{
+0000000A $NpcGroup_Decorations 	00000000
+00000006 $NpcGroup_Toads     	00000000
+00000000 00000000 00000000 
+}
+
+#new:NpcGroup $NpcGroup_Decorations
+{
+00000000 $NpcSettings_Decoration ~vec3f:NPC_Rowf
+00000020 $Script_null 00000000 00000000 0000010E 
+~NoDrops
+~Movement:NPC_Rowf
+~AnimationTable:NPC_Rowf
+00000000 00000000 00000000 00000000
+%
+00000001 $NpcSettings_Decoration ~vec3f:NPC_RowfKid
+00000020 $Script_NPC_Init_RowfKid 00000000 00000000 0000010E 
+~NoDrops
+~Movement:NPC_RowfKid
+~AnimationTable:NPC_RowfKid
+00000000 00000000 00000000 00000000
+%
+00000002 $NpcSettings_Decoration ~vec3f:Npc_Chuck
+00000020 $Script_null 00000000 00000000 0000010E 
+~NoDrops
+~Movement:Npc_Chuck
+~AnimationTable:Npc_Chuck
+00000000 00000000 00000000 00000000
+%
+00000003 $NpcSettings_Decoration ~vec3f:Npc_Merlon
+00000020 $Script_null 00000000 00000000 00000000 
+~NoDrops
+~Movement:Npc_Merlon
+~AnimationTable:Npc_Merlon
+00000000 00000000 00000000 00000000
+%
+00000004 $NpcSettings_Decoration ~vec3f:Npc_Green_Toad
+00000020 $Script_null 00000000 00000000 0000010E 
+~NoDrops
+~Movement:Npc_Green_Toad
+~AnimationTable:Npc_Green_Toad
+00000000 00000000 00000000 00000000
+%
+00000005 $NpcSettings_Decoration ~vec3f:Npc_Bub
+00000020 $Script_null 00000000 00000000 00000000
+~NoDrops
+~Movement:Npc_Bub
+~AnimationTable:Npc_Bub
+00000000 00000000 00000000 00000000
+%
+00000006 $NpcSettings_Decoration ~vec3f:Npc_DarkToad
+00000020 $Script_null 00000000 00000000 0000010E 
+~NoDrops
+~Movement:Npc_DarkToad
+~AnimationTable:Npc_DarkToad
+00000000 00000000 00000000 00000000
+%
+00000007 $NpcSettings_Decoration ~vec3f:Npc_Minh
+00000020 $Script_null 00000000 00000000 0000010E 
+~NoDrops
+~Movement:Npc_Minh
+~AnimationTable:Npc_Minh
+00000000 00000000 00000000 00000000
+%
+00000008 $NpcSettings_Decoration ~vec3f:Npc_Kolorado
+00000020 $Script_null 00000000 00000000 00000000 
+~NoDrops
+~Movement:Npc_Kolorado
+~AnimationTable:Npc_Kolorado
+00000000 00000000 00000000 00000000
+%
+00000009 $NpcSettings_Decoration ~vec3f:Npc_KoloradoWife
+00000020 $Script_null 00000000 00000000 00000000 
+~NoDrops
+~Movement:Npc_KoloradoWife
+~AnimationTable:Npc_KoloradoWife
+00000000 00000000 00000000 00000000
+}
+
+#new:NpcGroup $NpcGroup_Toads
+{
+.NpcID:Toad_0 $NpcSettings_Toad ~vec3f:Npc_Toad0
+00A40D01 $Script_NPC_Init_WalkingToad 00000000 00000000 0000010E 
+~NoDrops
+~Movement:Npc_Toad0
+~AnimationTable:Npc_Toad0
+00000000 00000000 00000000 00000000
+%
+.NpcID:Toad_1 $NpcSettings_Toad ~vec3f:Npc_Toad1
+00A40D01 $Script_NPC_Init_WalkingToad 00000000 00000000 0000010E 
+~NoDrops
+~Movement:Npc_Toad1
+~AnimationTable:Npc_Toad1
+00000000 00000000 00000000 00000000
+%
+.NpcID:Toad_2 $NpcSettings_Toad ~vec3f:Npc_Toad2
+00A40D01 $Script_NPC_Init_WalkingToad 00000000 00000000 0000010E 
+~NoDrops
+~Movement:Npc_Toad2
+~AnimationTable:Npc_Toad2
+00000000 00000000 00000000 00000000
+%
+.NpcID:Toad_3 $NpcSettings_Toad ~vec3f:Npc_Toad3
+00A40D01 $Script_NPC_Init_WalkingToad 00000000 00000000 0000010E 
+~NoDrops
+~Movement:Npc_Toad3
+~AnimationTable:Npc_Toad3
+00000000 00000000 00000000 00000000
+%
+.NpcID:Toad_4 $NpcSettings_Toad ~vec3f:Npc_Toad4
+00A40D01 $Script_NPC_Init_WalkingToad 00000000 00000000 0000010E 
+~NoDrops
+~Movement:Npc_Toad4
+~AnimationTable:Npc_Toad4
+00000000 00000000 00000000 00000000
+%
+.NpcID:Toad_5 $NpcSettings_Toad ~vec3f:Npc_Toad5
+00A40D01 $Script_NPC_Init_WalkingToad 00000000 00000000 0000010E 
+~NoDrops
+~Movement:Npc_Toad5
+~AnimationTable:Npc_Toad5
+00000000 00000000 00000000 00000000
+}
+
+#new:NpcSettings $NpcSettings_Decoration
+{
+00000000 00200025 00000000 00000000 00000000 00000000 00000000 00000000
+00000000 00000000 00630000 
+}
+
+#new:NpcSettings $NpcSettings_Toad
+{
+00000000 00500020 00000000 00000000 00000000 00000000 00000000 00000000 
+00000000 00000000 000D0000
+}
+
+#new:Script $Script_NPC_Init_WalkingToad
+{
+    Call    EnableNpcShadow ( .Npc:Self .False )
+    Call    BindNpcIdle ( .Npc:Self $Script_NPCIdle_Toad )
+    % hide toad
+    Call    802CFD30 ( .Npc:Self 7 *Fixed[0.0] .False .False .False ) % set npc opacity
+    Return
+    End
+}
+
+#new:Script $Script_NPCIdle_Toad
+{
+    % Wait to appear
+    Set  *Var9 200`
+    Call RandInt ( 500` *Var0 )
+    Add  *Var9 *Var0 % Frames to wait before starting to walk
+    Wait *Var9
+    Loop
+        Call    EnableNpcShadow ( .Npc:Self .True )
+        % Toad appears
+        Set *Var1 0
+        Thread
+            Loop 10` % toad unfades
+                Add     *Var1  24`
+                Call    802CFD30 ( .Npc:Self 7 *Var1 .False .False .False ) % set opacity
+                Wait    1 
+            EndLoop
+        EndThread
+        Call    SetNpcSpeed ( .Npc:Self *Fixed[2.5] )
+        Call    GetNpcPos ( .Npc:Self *Var0 *Var1 *Var2 )
+        Add     *Var2 600` % Z
+        Call    NpcMoveTo ( .Npc:Self *Var0 *Var2 0 )
+        % Toad dissapears once again
+        %
+        Thread
+            Set *Var1 240` % max opacity
+            Loop 10` % toad fades
+                Sub     *Var1  24`
+                If *Var1 < 0
+                    Set *Var1 0
+                EndIf
+                Call    802CFD30 ( .Npc:Self 7 *Var1 .False .False .False ) % set opacity
+                Wait    1 
+            EndLoop
+        EndThread
+        %
+        Call    GetNpcPos ( .Npc:Self *Var0 *Var1 *Var2 )
+        Add     *Var2 30` % Z
+        Call    NpcMoveTo ( .Npc:Self *Var0 *Var2 0 )
+        % put toad back to his origin position
+        Call    GetSelfNpcID ( *Var0 )
+        Switch *Var0
+            Case == .NpcID:Toad_0
+                Call    SetNpcPos ( .Npc:Self ~Vec3d:Npc_Toad0 )
+            Case == .NpcID:Toad_1
+                Call    SetNpcPos ( .Npc:Self ~Vec3d:Npc_Toad1 )
+            Case == .NpcID:Toad_2
+                Call    SetNpcPos ( .Npc:Self ~Vec3d:Npc_Toad2 )
+            Case == .NpcID:Toad_3
+                Call    SetNpcPos ( .Npc:Self ~Vec3d:Npc_Toad3 )
+            Case == .NpcID:Toad_4
+                Call    SetNpcPos ( .Npc:Self ~Vec3d:Npc_Toad4 )
+            Case == .NpcID:Toad_5
+                Call    SetNpcPos ( .Npc:Self ~Vec3d:Npc_Toad5 )
+        EndSwitch
+        Call    EnableNpcShadow ( .Npc:Self .False )
+        % wait to appear again
+        Call RandInt ( 200` *Var9 )
+        Wait *Var9
+    EndLoop
+    Return
+    End
+}
+
+#new:Script $Script_null
+{
+	Return
+	End
+}
+
+#new:Script $Script_NPC_Init_RowfKid
+{
+    Call  SetNpcScale   ( .Npc:Self *Fixed[0.75] *Fixed[0.75] *Fixed[0.75] )
+    Return
+    End
+}
+
+#new:Script $Script_BindScripts_Special {
+	% Delivery Point
+	Bind     $Script_DeliveryPoint .Trigger:WallPressA ~Collider:delivery1 00000001 00000000
+	Bind     $Script_DeliveryPoint .Trigger:WallPressA ~Collider:delivery2 00000001 00000000
+    Bind     $Script_DeliveryPoint .Trigger:WallPressA ~Collider:delivery3 00000001 00000000
+    Bind     $Script_DeliveryPoint .Trigger:WallPressA ~Collider:delivery4 00000001 00000000
+	% Mix Points
+	Bind     $Script_MixPoint .Trigger:WallPressA ~Collider:mixer1 00000001 00000000
+	% Trash bin
+	Bind     $Script_TrashBin .Trigger:WallPressA ~Collider:trash1 00000001 00000000
+    Bind     $Script_TrashBin .Trigger:WallPressA ~Collider:trash2 00000001 00000000
+	% Stove
+	Bind     $Script_Stove_1 .Trigger:WallPressA ~Collider:stove1 00000001 00000000
+    Bind     $Script_Stove_2 .Trigger:WallPressA ~Collider:stove2 00000001 00000000
+	% Cutting table
+	Bind     $Script_Cutting .Trigger:WallPressA ~Collider:cutting1 00000001 00000000
+	% Dispatchers
+    Bind     $Script_Dispatcher_Sugar .Trigger:WallPressA ~Collider:disp_sugar 00000001 00000000
+    Bind     $Script_Dispatcher_Egg .Trigger:WallPressA ~Collider:disp_egg 00000001 00000000
+    Bind     $Script_Dispatcher_CakeMix .Trigger:WallPressA ~Collider:disp_flour 00000001 00000000
+    Bind     $Script_Dispatcher_Cream .Trigger:WallPressA ~Collider:disp_cream 00000001 00000000
+    Bind     $Script_Dispatcher_Strawberry .Trigger:WallPressA ~Collider:disp_strawberry 00000001 00000000
+    Bind     $Script_Dispatcher_BlueBerry .Trigger:WallPressA ~Collider:disp_blue 00000001 00000000
+    Return
+    End
+}
+
+#new:Script $Script_InitItemEntities {
+	% Init Mix Bowls
+	Set	    *Var0 	~Collider:itemPos_Bowl1
+	ExecWait $Script_GetItemPosForCollider
+	Set		*Var3 .Item:CakeBowl
+	Call	DropItemEntity ( *Var3 *Var0 *Var1 *Var2 .ItemSpawnMode:Decoration .False )
+	Call 	$AddItemData ( .ItemType:Bowl *Var0 *Var3 )
+	%
+	Set	    *Var0 	~Collider:itemPos_Bowl2
+	ExecWait $Script_GetItemPosForCollider
+	Set		*Var3 .Item:CakeBowl
+	Call	DropItemEntity ( *Var3 *Var0 *Var1 *Var2 .ItemSpawnMode:Decoration .False )
+	Call 	$AddItemData ( .ItemType:Bowl *Var0 *Var3 )
+	%
+	% Init Molds
+	%
+	Set	    *Var0 	~Collider:itemPos_Mold1
+	ExecWait $Script_GetItemPosForCollider
+	Set		*Var3 .Item:CakePan
+	Call	DropItemEntity ( *Var3 *Var0 *Var1 *Var2 .ItemSpawnMode:Decoration .False )
+	Call 	$AddItemData ( .ItemType:Mold *Var0 *Var3 )
+	%
+	Set	    *Var0 	~Collider:itemPos_Mold2
+	ExecWait $Script_GetItemPosForCollider
+	Set		*Var3 .Item:CakePan
+	Call	DropItemEntity ( *Var3 *Var0 *Var1 *Var2 .ItemSpawnMode:Decoration .False )
+	Call 	$AddItemData ( .ItemType:Mold *Var0 *Var3 )
+	Return
+	End
+}
+
+#new:Script $Script_Stove_1 {
+	SetConst *VarA *MapVar[0] % stove's bool
+	SetConst *VarB *MapVar[1] % stove's itemIndex
+    Set *MapVar[2] ~Model:stove1  % stove's model groupID
+    SetConst *VarC *MapVar[2]
+	Exec $Script_Stove
+	Return
+	End
+}
+
+#new:Script $Script_Stove_2 {
+	SetConst *VarA *MapVar[3] % stove's bool
+	SetConst *VarB *MapVar[4] % stove's itemIndex
+    Set *MapVar[5] ~Model:stove2  % stove's model groupID
+    SetConst *VarC *MapVar[5]
+	Exec $Script_Stove
+	Return
+	End
+}
+
+% Possible orders for this level
+#new:Unknown $OrdersTable_lvl02
+{
+	.Item:CakeCream1Blue1 .Item:CakeCream1Blue1 .Item:CakeCream1Blue1 .Item:CakeCream1Straw1 .Item:CakeCream1Straw1Blue1 .Item:CakeCream2
+}
+
+#new:Script $Script_DispatchNewOrders_Init
+{
+	Set		*Var4 $OrdersTable_lvl02
+	Set		*Var5 6
+	Exec	$Script_DispatchNewOrders
+	Return
+	End
+}
+
+%
+
+#new:Script $Script_EnterMap
+{
+	Return
+	End
+}
+
+#new:Script $Script_CreateExitTriggers
+{
+	Return
+	End
+}
+
+% Panners
+
+#new:Script $Script_TexturePan_Update
+{
+    SetGroup  00000000
+    If  *Var[5]  ==  00000001
+        If  *Var[6]  ==  00000001
+            If  *Var[7]  ==  00000001
+                If  *Var[8]  ==  00000001
+                    Call  $Function_TexturePan_Simple ( )
+                    Return
+                EndIf
+            EndIf
+        EndIf
+    EndIf
+    Call  $Function_TexturePan_Complex ( )
+    Return
+    End
+}
+
+#new:Function $Function_TexturePan_Simple
+{
+    ADDIU       SP, SP, FFE8
+    SW          S0, 10 (SP)
+    COPY        S0, A0
+    SW          RA, 14 (SP)
+    LW          V1, A8 (S0)
+    LW          V0, 88 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o30
+    SW          V1, A8 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .o40
+    ADDU        V0, V1, V0
+    .o30
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .o44
+    SUBU        V0, V1, A0
+    .o40
+    SW          V0, A8 (S0)
+    .o44
+    LW          V1, AC (S0)
+    LW          V0, 8C (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o64
+    SW          V1, AC (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .o74
+    ADDU        V0, V1, V0
+    .o64
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .o78
+    SUBU        V0, V1, A0
+    .o74
+    SW          V0, AC (S0)
+    .o78
+    LW          V1, B0 (S0)
+    LW          V0, 90 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o98
+    SW          V1, B0 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .oA8
+    ADDU        V0, V1, V0
+    .o98
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .oAC
+    SUBU        V0, V1, A0
+    .oA8
+    SW          V0, B0 (S0)
+    .oAC
+    LW          V1, B4 (S0)
+    LW          V0, 94 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .oCC
+    SW          V1, B4 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .oDC
+    ADDU        V0, V1, V0
+    .oCC
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .oE0
+    SUBU        V0, V1, A0
+    .oDC
+    SW          V0, B4 (S0)
+    .oE0
+    LW          A0, 84 (S0)
+    JAL         8011BC1C
+    LW          A1, A8 (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC34
+    LW          A1, AC (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC4C
+    LW          A1, B0 (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC64
+    LW          A1, B4 (S0)
+    LW          RA, 14 (SP)
+    LW          S0, 10 (SP)
+    CLEAR       V0
+    JR          RA
+    ADDIU       SP, SP, 18
+}
+
+#new:Function $Function_TexturePan_Complex
+{
+    ADDIU       SP, SP, FFE8
+    SW          S0, 10 (SP)
+    COPY        S0, A0
+    BEQ         A1, R0, .o24
+    SW          RA, 14 (SP)
+    SW          R0, 70 (S0)
+    SW          R0, 74 (S0)
+    SW          R0, 78 (S0)
+    SW          R0, 7C (S0)
+    .o24
+    LW          V0, 70 (S0)
+    BNE         V0, R0, .o64
+    NOP
+    LW          V1, A8 (S0)
+    LW          V0, 88 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o50
+    SW          V1, A8 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .o60
+    ADDU        V0, V1, V0
+    .o50
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .o64
+    SUBU        V0, V1, A0
+    .o60
+    SW          V0, A8 (S0)
+    .o64
+    LW          V0, 74 (S0)
+    BNE         V0, R0, .oA4
+    NOP
+    LW          V1, AC (S0)
+    LW          V0, 8C (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o90
+    SW          V1, AC (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .oA0
+    ADDU        V0, V1, V0
+    .o90
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .oA4
+    SUBU        V0, V1, A0
+    .oA0
+    SW          V0, AC (S0)
+    .oA4
+    LW          V0, 78 (S0)
+    BNE         V0, R0, .oE4
+    NOP
+    LW          V1, B0 (S0)
+    LW          V0, 90 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .oD0
+    SW          V1, B0 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .oE0
+    ADDU        V0, V1, V0
+    .oD0
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .oE4
+    SUBU        V0, V1, A0
+    .oE0
+    SW          V0, B0 (S0)
+    .oE4
+    LW          V0, 7C (S0)
+    BNE         V0, R0, .o124
+    NOP
+    LW          V1, B4 (S0)
+    LW          V0, 94 (S0)
+    ADDU        V1, V1, V0
+    BGEZ        V1, .o110
+    SW          V1, B4 (S0)
+    LUI         V0, 2
+    BEQ         R0, R0, .o120
+    ADDU        V0, V1, V0
+    .o110
+    LUI         A0, 2
+    SLT         V0, A0, V1
+    BEQ         V0, R0, .o124
+    SUBU        V0, V1, A0
+    .o120
+    SW          V0, B4 (S0)
+    .o124
+    LW          A0, 84 (S0)
+    JAL         8011BC1C
+    LW          A1, A8 (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC34
+    LW          A1, AC (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC4C
+    LW          A1, B0 (S0)
+    LW          A0, 84 (S0)
+    JAL         8011BC64
+    LW          A1, B4 (S0)
+    LW          V0, 70 (S0)
+    LW          V1, 78 (S0)
+    LW          A0, 98 (S0)
+    ADDIU       V0, V0, 1
+    SW          V0, 70 (S0)
+    LW          V0, 74 (S0)
+    ADDIU       V1, V1, 1
+    SW          V1, 78 (S0)
+    LW          V1, 70 (S0)
+    ADDIU       V0, V0, 1
+    SW          V0, 74 (S0)
+    LW          V0, 7C (S0)
+    SLT         V1, V1, A0
+    ADDIU       V0, V0, 1
+    BNE         V1, R0, .o198
+    SW          V0, 7C (S0)
+    SW          R0, 70 (S0)
+    .o198
+    LW          V0, 74 (S0)
+    LW          V1, 9C (S0)
+    SLT         V0, V0, V1
+    BEQL        V0, R0, .o1AC
+    SW          R0, 74 (S0)
+    .o1AC
+    LW          V0, 78 (S0)
+    LW          V1, A0 (S0)
+    SLT         V0, V0, V1
+    BEQL        V0, R0, .o1C0
+    SW          R0, 78 (S0)
+    .o1C0
+    LW          V0, 7C (S0)
+    LW          V1, A4 (S0)
+    SLT         V0, V0, V1
+    BEQL        V0, R0, .o1D4
+    SW          R0, 7C (S0)
+    .o1D4
+    LW          RA, 14 (SP)
+    LW          S0, 10 (SP)
+    CLEAR       V0
+    JR          RA
+    ADDIU       SP, SP, 18
+}
+
+#new:Script $Script_SetupTexturePan
+{
+	Call     802C9000 	( ~Model:band 0 )
+	Thread
+		Set  *Var[0] 0
+		Set  *Var[1] 0
+		Set  *Var[2] FFFFFE92
+		Set  *Var[3] 0
+		Set  *Var[4] 0
+		Set  *Var[5] 0
+		Set  *Var[6] 0
+		Set  *Var[7] 0
+		Set  *Var[8] 0
+		Set  *Var[9] 0
+		Set  *Var[A] 0
+		Set  *Var[B] 0
+		Set  *Var[C] 0
+		Exec $Script_TexturePan_Update
+	EndThread
+	Return
+	End
+}
